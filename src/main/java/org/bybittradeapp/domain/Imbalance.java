@@ -45,6 +45,19 @@ public class Imbalance {
         this.type = type;
     }
 
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        this.status = status;
+    }
+
+    public boolean same(Imbalance imbalance) {
+        return this.max == imbalance.getMax() &&
+                this.min == imbalance.getMin() &&
+                this.type == imbalance.getType();
+    }
     @Override
     public String toString() {
         return type +

@@ -1,8 +1,9 @@
 package org.bybittradeapp.domain;
 
+import java.io.Serializable;
 import java.time.Instant;
 
-public class MarketKlineEntry {
+public class MarketKlineEntry implements Serializable {
     private long startTime;
     private double openPrice;
     private double highPrice;
