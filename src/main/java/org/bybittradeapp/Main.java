@@ -15,7 +15,7 @@ public class Main {
     public static final ObjectMapper mapper = new ObjectMapper();
 
     private static final MarketDataService marketDataService = new MarketDataService();
-    private static final UIService uiService = new UIService();
+    public static final UIService uiService = new UIService();
 
     public static void main(String[] args) {
         registerModules();

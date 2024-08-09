@@ -12,6 +12,7 @@ import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -61,28 +62,18 @@ public class JsonUtils {
         long minUiTime = uiMarketData.keySet().stream().min(Comparator.comparing(Long::longValue)).get();
 
         for (Zone zone : zones) {
-            if (minUiTime - zone.getLine().getLeft() > 1000 * 60 * 60 * 24) {
-                continue;
-            }
-
-            Optional<Long> timeLeft = uiMarketData.keySet().stream()
-                    .min(Comparator.comparing(key ->
-                            Math.abs(key - zone.getZone().getLeft() + zoneDelay)));
-            Optional<Long> timeRight = uiMarketData.keySet().stream()
-                    .min(Comparator.comparing(key ->
-                            Math.abs(key - zone.getZone().getRight() + zoneDelay)));
-            if (timeLeft.isEmpty() || timeRight.isEmpty()) {
+            if (minUiTime - zone.getLeft() > 1000 * 60 * 60 * 24) {
                 continue;
             }
 
             ArrayNode p1Node = mapper.createArrayNode();
-            p1Node.add(timeLeft.get());
-            p1Node.add((zone.getZone().getTop() + zone.getZone().getBottom()) / 2.);
+            p1Node.add(zone.getLeft());
+            p1Node.add((zone.getTop() + zone.getBottom()) / 2.);
 
             ArrayNode p2Node = mapper.createArrayNode();
-            p2Node.add(timeRight.get());
-            p2Node.add((zone.getZone().getTop() + zone.getZone().getBottom()) / 2.);
-            Settings settings = new Settings(p1Node, p2Node, (int) (zone.getMargin() * 100.), zone.getZone().getColor());
+            p2Node.add(zone.getRight());
+            p2Node.add((zone.getTop() + zone.getBottom()) / 2.);
+            Settings settings = new Settings(p1Node, p2Node, (int) (zone.getMargin() * 200.), zone.getColor());
 
             Segment segment = new Segment("zone", "Segment", mapper.createArrayNode(), settings);
 

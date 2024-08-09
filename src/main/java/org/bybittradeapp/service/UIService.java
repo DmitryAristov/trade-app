@@ -30,7 +30,7 @@ import static org.bybittradeapp.Main.mapper;
 import static org.bybittradeapp.utils.JsonUtils.updateMarketDataJson;
 
 public class UIService {
-    private static final long START_TIMESTAMP = Instant.now().minus(180, ChronoUnit.DAYS).toEpochMilli();
+    private static final long START_TIMESTAMP = Instant.now().minus(240, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
     private final TreeMap<Long, MarketKlineEntry> uiMarketData = new TreeMap<>();
     private final MarketInterval marketInterval;
@@ -38,7 +38,7 @@ public class UIService {
 
 
     public UIService() {
-        this.marketInterval = MarketInterval.FOUR_HOURLY;
+        this.marketInterval = MarketInterval.DAILY;
     }
 
     public UIService(MarketInterval marketInterval) {
