@@ -1,7 +1,10 @@
 package org.bybittradeapp.service;
 
 import com.bybit.api.client.config.BybitApiConfig;
-import com.bybit.api.client.domain.market.*;
+import com.bybit.api.client.domain.market.MarketInterval;
+import com.bybit.api.client.domain.market.InstrumentStatus;
+import com.bybit.api.client.domain.market.DataRecordingPeriod;
+import com.bybit.api.client.domain.market.IntervalTime;
 import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.service.BybitApiClientFactory;
 import com.bybit.api.client.domain.CategoryType;

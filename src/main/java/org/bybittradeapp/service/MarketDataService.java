@@ -29,7 +29,7 @@ import static org.bybittradeapp.Main.TEST_OPTION;
 import static org.bybittradeapp.Main.mapper;
 
 public class MarketDataService {
-    private static final long START_TIMESTAMP = Instant.now().minus(180, ChronoUnit.DAYS).toEpochMilli();
+    private static final long START_TIMESTAMP = Instant.now().minus(60, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
     private static final String PATH_RESOURCES = "C:\\Users\\dimas\\IdeaProjects\\bybit-trade-app\\src\\main\\resources";
 
@@ -37,7 +37,6 @@ public class MarketDataService {
     private final TreeMap<Long, MarketKlineEntry> marketData = _deserialize();
     private final Timer timer = new Timer();
     private final StrategyService strategyService = new StrategyService(this);
-
 
     public void start() {
         if (TEST_OPTION) {

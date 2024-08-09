@@ -8,17 +8,18 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.bybittradeapp.domain.Imbalance;
 import org.bybittradeapp.domain.MarketKlineEntry;
+import org.bybittradeapp.domain.Trend;
+import org.bybittradeapp.domain.Zone;
+import org.bybittradeapp.utils.JsonUtils;
 import org.jetbrains.annotations.NotNull;
 
-import java.io.File;
-import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeMap;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static org.bybittradeapp.Main.TEST_OPTION;
 import static org.bybittradeapp.Main.mapper;
+import static org.bybittradeapp.utils.JsonUtils.updateMarketDataJson;
 
 public class UIService {
     private static final long START_TIMESTAMP = Instant.now().minus(180, ChronoUnit.DAYS).toEpochMilli();
@@ -34,7 +36,6 @@ public class UIService {
     private final MarketInterval marketInterval;
     private final Timer timer = new Timer();
 
-    public static final String TRADING_VUE_PATH = "C:\\Users\\dimas\\IdeaProjects\\trading-vue-js";
 
     public UIService() {
         this.marketInterval = MarketInterval.FOUR_HOURLY;
@@ -46,9 +47,9 @@ public class UIService {
 
     public void start() {
         if (TEST_OPTION) {
+            updateMarketData();
             return;
         }
-
         TimerTask task = new TimerTask() {
             @Override
             public void run() {
@@ -125,7 +126,7 @@ public class UIService {
 
             if (marketKlineResult.getMarketKlineEntries().size() < MAX_ROWS_LIMIT) {
                 isInProcess = false;
-                updateDataJson();
+                updateMarketDataJson(uiMarketData);
             }
         }
     }
@@ -141,31 +142,7 @@ public class UIService {
         return result;
     }
 
-    private void updateDataJson() {
-        Long zoneDelay = 10800000L;
-
-        final ArrayNode ohlcv = mapper.createArrayNode();
-        uiMarketData.forEach((key, value) -> {
-            ArrayNode entryNode = mapper.createArrayNode();
-            entryNode.add(key + zoneDelay);
-            entryNode.add(value.getOpenPrice());
-            entryNode.add(value.getHighPrice());
-            entryNode.add(value.getLowPrice());
-            entryNode.add(value.getClosePrice());
-            ohlcv.add(entryNode);
-        });
-
-        try {
-            File file = new File(TRADING_VUE_PATH + "\\data\\data.json");
-            JsonNode rootNode = mapper.readTree(file);
-
-            if (rootNode.has("ohlcv")) {
-                ((ObjectNode) rootNode).set("ohlcv", ohlcv);
-            }
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
-
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public void updateAnalysedDataJson(List<Zone> zones, Set<Imbalance> imbalances, Trend trend) {
+        JsonUtils.updateAnalysedDataJson(zones, imbalances, trend, uiMarketData);
     }
 }

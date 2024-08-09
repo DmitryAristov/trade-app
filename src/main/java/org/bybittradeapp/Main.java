@@ -4,9 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import org.bybittradeapp.serializers.ColorSerializer;
 import org.bybittradeapp.service.MarketDataService;
+import org.bybittradeapp.service.StrategyService;
 import org.bybittradeapp.service.UIService;
 
-import java.awt.*;
+import java.awt.Color;
 
 public class Main {
 
@@ -20,6 +21,10 @@ public class Main {
         registerModules();
         uiService.start();
         marketDataService.start();
+
+        if (TEST_OPTION) {
+            uiService.updateAnalysedDataJson(StrategyService.zones, StrategyService.imbalances, StrategyService.trend);
+        }
     }
 
     private static void registerModules() {
@@ -28,4 +33,3 @@ public class Main {
         mapper.registerModule(module);
     }
 }
-

@@ -1,6 +1,18 @@
 package org.bybittradeapp.domain;
 
 public class Zone {
+    public enum Type {
+        SUPPORT,
+        RESISTANCE;
+        @Override
+        public String toString() {
+            return switch (this) {
+                case SUPPORT -> "Support";
+                case RESISTANCE -> "Resistance";
+            };
+        }
+    }
+
     private Box zone;
     private Box liquiditySweep;
     private Line line;
@@ -9,8 +21,18 @@ public class Zone {
     private boolean retest;
     private boolean liquidation;
     private float margin;
+    private Type type;
 
-    public Zone(Box zone, Box liquiditySweep, Line line, boolean breakout, boolean test, boolean retest, boolean liquidation, float margin) {
+    public Zone(Box zone,
+                Box liquiditySweep,
+                Line line,
+                boolean breakout,
+                boolean test,
+                boolean retest,
+                boolean liquidation,
+                float margin,
+                Type type
+    ) {
         this.zone = zone;
         this.liquiditySweep = liquiditySweep;
         this.line = line;
@@ -19,6 +41,7 @@ public class Zone {
         this.retest = retest;
         this.liquidation = liquidation;
         this.margin = margin;
+        this.type = type;
     }
 
     public Box getZone() {
@@ -85,17 +108,16 @@ public class Zone {
         this.margin = margin;
     }
 
+    public Type getType() {
+        return type;
+    }
+
+    public void setType(Type type) {
+        this.type = type;
+    }
+
     @Override
     public String toString() {
-        return "Zone{" +
-                "zone=" + zone +
-                ", liquiditySweep=" + liquiditySweep +
-                ", line=" + line +
-                ", breakout=" + breakout +
-                ", test=" + test +
-                ", retest=" + retest +
-                ", liquidation=" + liquidation +
-                ", margin=" + margin +
-                '}';
+        return type.toString() + " zone, breakout=" + breakout + ", test=" + test + ", retest=" + retest + ", liquidation=" + liquidation;
     }
 }

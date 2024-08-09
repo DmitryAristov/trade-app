@@ -37,13 +37,7 @@ public class ImbalanceService {
                                 TreeMap::new
                         ));
         Imbalance imbalance = getImbalance(marketData);
-        if (lastImbalance == null ||
-                (imbalance != null && !imbalance.same(lastImbalance))) {
-            lastImbalance = imbalance;
-        }
-
-        setImbalanceStatus(lastImbalance);
-        return lastImbalance;
+        return imbalance;
     }
 
     private void setImbalanceStatus(Imbalance imbalance) {
@@ -85,7 +79,7 @@ public class ImbalanceService {
             } else {
                 imbalance.setType(Imbalance.Type.UP);
             }
-            System.out.println(imbalance);
+            imbalance.setStatus(Imbalance.Status.PROGRESS);
             return imbalance;
         }
         return null;

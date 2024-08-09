@@ -1,60 +1,60 @@
 package org.bybittradeapp.domain;
 
-import java.awt.*;
+import java.awt.Color;
 
 public class Line {
-    private long x1, x2;
-    private float y1, y2;
+    private long left, right;
+    private float top, bottom;
     private int width;
     private Color color;
 
     public Line() {
-        this.x1 = 0L;
-        this.y1 = 0f;
-        this.x2 = 0L;
-        this.y2 = 0f;
+        this.left = 0L;
+        this.top = 0f;
+        this.right = 0L;
+        this.bottom = 0f;
         this.width = 0;
     }
 
-    public Line(long x1, float y1, long x2, float y2, Color color, int width) {
-        this.x1 = x1;
-        this.y1 = y1;
-        this.x2 = x2;
-        this.y2 = y2;
+    public Line(long left, float top, long right, float bottom, Color color, int width) {
+        this.left = left;
+        this.top = top;
+        this.right = right;
+        this.bottom = bottom;
         this.width = width;
         this.color = color;
     }
 
-    public long getX1() {
-        return x1;
+    public long getLeft() {
+        return left;
     }
 
-    public void setX1(long x1) {
-        this.x1 = x1;
+    public void setLeft(long left) {
+        this.left = left;
     }
 
-    public long getX2() {
-        return x2;
+    public long getRight() {
+        return right;
     }
 
-    public void setX2(long x2) {
-        this.x2 = x2;
+    public void setRight(long right) {
+        this.right = right;
     }
 
-    public float getY1() {
-        return y1;
+    public float getTop() {
+        return top;
     }
 
-    public void setY1(float y1) {
-        this.y1 = y1;
+    public void setTop(float top) {
+        this.top = top;
     }
 
-    public float getY2() {
-        return y2;
+    public float getBottom() {
+        return bottom;
     }
 
-    public void setY2(float y2) {
-        this.y2 = y2;
+    public void setBottom(float bottom) {
+        this.bottom = bottom;
     }
 
     public int getWidth() {
@@ -76,10 +76,10 @@ public class Line {
     @Override
     public String toString() {
         return "Line{" +
-                "x1=" + x1 +
-                ", x2=" + x2 +
-                ", y1=" + y1 +
-                ", y2=" + y2 +
+                "x1=" + left +
+                ", x2=" + right +
+                ", y1=" + top +
+                ", y2=" + bottom +
                 ", width=" + width +
                 ", color=" + color +
                 '}';
