@@ -7,7 +7,6 @@ import org.bybittradeapp.domain.Imbalance;
 import org.bybittradeapp.domain.MarketKlineEntry;
 import org.bybittradeapp.domain.Zone;
 
-import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
 import java.util.Comparator;
@@ -122,6 +121,33 @@ public class JsonUtils {
 
             ObjectNode segmentNodeDown = mapper.valueToTree(segmentDown);
             onchart.add(segmentNodeDown);
+        }
+
+        for (Zone zone : zones) {
+
+            MarketKlineEntry time = uiMarketData.stream()
+                        .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - zone.getTimestamp() + zoneDelay)))
+                        .orElse(null);
+
+            if (time == null || uiMarketData.stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 4 * 60 * 60 * 1000)) {
+                continue;
+            }
+
+            String color = zone.getType() == Zone.Type.SUPPORT ? "#79999e42" : "#ef535042";
+
+            ArrayNode p1NodeUp = mapper.createArrayNode();
+            p1NodeUp.add(time.getStartTime());
+            p1NodeUp.add(zone.getPrice());
+
+            ArrayNode p2NodeUp = mapper.createArrayNode();
+            p2NodeUp.add(time.getStartTime() + 4 * 60 * 60 * 1000);
+            p2NodeUp.add(zone.getPrice());
+
+            Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
+            Segment segmentUp = new Segment("zone", "Segment", mapper.createArrayNode(), settingsUp);
+
+            ObjectNode segmentNodeUp = mapper.valueToTree(segmentUp);
+            onchart.add(segmentNodeUp);
         }
 
         try {

@@ -7,7 +7,7 @@ import org.bybittradeapp.domain.MarketKlineEntry;
 import org.bybittradeapp.domain.Zone;
 import org.bybittradeapp.service.ImbalanceService;
 import org.bybittradeapp.service.MarketDataService;
-import org.bybittradeapp.service.MinMaxService;
+import org.bybittradeapp.service.ExtremumService;
 import org.bybittradeapp.service.UIService;
 import org.bybittradeapp.utils.JsonUtils;
 
@@ -21,7 +21,7 @@ public class Main {
     private static final MarketDataService marketDataService = new MarketDataService();
     private static final UIService uiService = new UIService(MarketInterval.FOUR_HOURLY);
     private static final ImbalanceService imbalanceService = new ImbalanceService(marketDataService);
-    private static final MinMaxService mmService = new MinMaxService(marketDataService);
+    private static final ExtremumService mmService = new ExtremumService(marketDataService);
 
     public static void main(String[] args) {
         uiService.updateMarketData();
