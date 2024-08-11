@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.bybittradeapp.domain.Imbalance;
 import org.bybittradeapp.domain.MarketKlineEntry;
-import org.bybittradeapp.domain.Zone;
+import org.bybittradeapp.domain.Extremum;
 
 import java.io.File;
 import java.io.IOException;
@@ -51,11 +51,11 @@ public class JsonUtils {
         }
     }
 
-    public static void updateAnalysedDataJson(List<Zone> zones,
+    public static void updateAnalysedDataJson(List<Extremum> extrema,
                                               List<Imbalance> imbalances,
                                               List<MarketKlineEntry> uiMarketData) {
         long zoneDelay = 10800000L;
-        System.out.println("onchart with " + zones.size() + " zones and " + imbalances.size() + " imbalances");
+        System.out.println("onchart with " + extrema.size() + " zones and " + imbalances.size() + " imbalances");
         final ArrayNode onchart = mapper.createArrayNode();
 
         for (Imbalance imbalance : imbalances) {
@@ -123,25 +123,25 @@ public class JsonUtils {
             onchart.add(segmentNodeDown);
         }
 
-        for (Zone zone : zones) {
+        for (Extremum extremum : extrema) {
 
             MarketKlineEntry time = uiMarketData.stream()
-                        .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - zone.getTimestamp() + zoneDelay)))
+                        .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp() + zoneDelay)))
                         .orElse(null);
 
-            if (time == null || uiMarketData.stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 4 * 60 * 60 * 1000)) {
+            if (time == null || uiMarketData.stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 8 * 60 * 60 * 1000)) {
                 continue;
             }
 
-            String color = zone.getType() == Zone.Type.SUPPORT ? "#79999e42" : "#ef535042";
+            String color = extremum.getType() == Extremum.Type.MAX ? "#23a776" : "#e54150";
 
             ArrayNode p1NodeUp = mapper.createArrayNode();
             p1NodeUp.add(time.getStartTime());
-            p1NodeUp.add(zone.getPrice());
+            p1NodeUp.add(extremum.getPrice());
 
             ArrayNode p2NodeUp = mapper.createArrayNode();
-            p2NodeUp.add(time.getStartTime() + 4 * 60 * 60 * 1000);
-            p2NodeUp.add(zone.getPrice());
+            p2NodeUp.add(time.getStartTime() + 8 * 60 * 60 * 1000);
+            p2NodeUp.add(extremum.getPrice());
 
             Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
             Segment segmentUp = new Segment("zone", "Segment", mapper.createArrayNode(), settingsUp);

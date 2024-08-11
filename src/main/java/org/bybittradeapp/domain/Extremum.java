@@ -2,15 +2,15 @@ package org.bybittradeapp.domain;
 
 import java.util.Objects;
 
-public class Zone {
+public class Extremum {
     public enum Type {
-        SUPPORT,
-        RESISTANCE;
+        MIN,
+        MAX;
         @Override
         public String toString() {
             return switch (this) {
-                case SUPPORT -> "Support";
-                case RESISTANCE -> "Resistance";
+                case MIN -> "Min";
+                case MAX -> "Max";
             };
         }
     }
@@ -19,7 +19,7 @@ public class Zone {
     private double price;
     private Type type;
 
-    public Zone(long timestamp, double price, Type type) {
+    public Extremum(long timestamp, double price, Type type) {
         this.timestamp = timestamp;
         this.price = price;
         this.type = type;
@@ -53,12 +53,21 @@ public class Zone {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        Zone zone = (Zone) o;
-        return timestamp == zone.timestamp && Double.compare(zone.price, price) == 0 && type == zone.type;
+        Extremum extremum = (Extremum) o;
+        return timestamp == extremum.timestamp && Double.compare(extremum.price, price) == 0 && type == extremum.type;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(timestamp, price, type);
+    }
+
+    @Override
+    public String toString() {
+        return "Extremum{" +
+                "timestamp=" + timestamp +
+                ", price=" + price +
+                ", type=" + type +
+                '}';
     }
 }
