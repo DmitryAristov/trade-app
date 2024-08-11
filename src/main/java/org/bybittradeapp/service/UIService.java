@@ -8,68 +8,31 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import org.bybittradeapp.domain.Imbalance;
 import org.bybittradeapp.domain.MarketKlineEntry;
-import org.bybittradeapp.domain.Trend;
-import org.bybittradeapp.domain.Zone;
-import org.bybittradeapp.utils.JsonUtils;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.List;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
 
-import static org.bybittradeapp.Main.TEST_OPTION;
+import static org.bybittradeapp.Main.DAYS_TO_CHECK;
 import static org.bybittradeapp.Main.mapper;
 import static org.bybittradeapp.utils.JsonUtils.updateMarketDataJson;
 
 public class UIService {
-    private static final long START_TIMESTAMP = Instant.now().minus(240, ChronoUnit.DAYS).toEpochMilli();
+    private static final long START_TIMESTAMP = Instant.now().minus(DAYS_TO_CHECK, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
-    private final TreeMap<Long, MarketKlineEntry> uiMarketData = new TreeMap<>();
+    private final ArrayList<MarketKlineEntry> uiMarketData = new ArrayList<>();
     private final MarketInterval marketInterval;
-    private final Timer timer = new Timer();
-
-
-    public UIService() {
-        this.marketInterval = MarketInterval.DAILY;
-    }
 
     public UIService(MarketInterval marketInterval) {
         this.marketInterval = marketInterval;
     }
 
-    public void start() {
-        if (TEST_OPTION) {
-            updateMarketData();
-            return;
-        }
-        TimerTask task = new TimerTask() {
-            @Override
-            public void run() {
-                updateMarketData();
-            }
-        };
-        long taskPeriod = switch (marketInterval) {
-            case ONE_MINUTE -> 60000L;
-            case THREE_MINUTES -> 180000L;
-            default -> 300000L;
-        };
-        timer.scheduleAtFixedRate(task, 0, taskPeriod);
-    }
-
-    public void stop() {
-        timer.cancel();
-    }
-
     public void updateMarketData() {
-        Long latestSavedElement = uiMarketData.keySet().stream()
+        Long latestSavedElement = uiMarketData.stream()
+                .map(MarketKlineEntry::getStartTime)
                 .max(Comparator.comparing(Long::longValue))
                 .orElse(null);
         getMarketDataProcess(latestSavedElement);
@@ -113,20 +76,18 @@ public class UIService {
             var marketKlineResultGenericResponse = mapper.convertValue(marketKlineResultRaw, GenericResponse.class);
             var marketKlineResult = mapper.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
 
-            uiMarketData.putAll(
+            uiMarketData.addAll(
                     marketKlineResult.getMarketKlineEntries()
                             .stream()
-                            .collect(Collectors.toMap(
-                                    com.bybit.api.client.domain.market.response.kline.MarketKlineEntry::getStartTime,
-                                    this::toMarketKlineEntry
-                            ))
-            );
+                            .map(this::toMarketKlineEntry)
+                            .toList());
 
             latestSavedElementTimestamp = marketKlineResult.getMarketKlineEntries().get(0).getStartTime();
 
             if (marketKlineResult.getMarketKlineEntries().size() < MAX_ROWS_LIMIT) {
-                isInProcess = false;
+                uiMarketData.sort(Comparator.comparing(MarketKlineEntry::getStartTime));
                 updateMarketDataJson(uiMarketData);
+                isInProcess = false;
             }
         }
     }
@@ -142,7 +103,7 @@ public class UIService {
         return result;
     }
 
-    public void updateAnalysedDataJson(List<Zone> zones, Set<Imbalance> imbalances, Trend trend) {
-        JsonUtils.updateAnalysedDataJson(zones, imbalances, trend, uiMarketData);
+    public ArrayList<MarketKlineEntry> getUiMarketData() {
+        return uiMarketData;
     }
 }

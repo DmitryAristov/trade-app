@@ -57,7 +57,6 @@ public class MarketKlineEntry implements Serializable {
                 ", openPrice='" + openPrice + '\'' +
                 ", highPrice='" + highPrice + '\'' +
                 ", lowPrice='" + lowPrice + '\'' +
-                ", closePrice='" + closePrice + '\'' +
                 '}';
     }
 }

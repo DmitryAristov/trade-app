@@ -7,7 +7,7 @@ import java.util.Objects;
 
 public class Imbalance {
     public enum Type { UP, DOWN }
-    public enum Status { PROGRESS, FINISHED }
+    public enum Status { PROGRESS, COMPLETE }
     @NotNull
     private MarketKlineEntry min;
     @NotNull

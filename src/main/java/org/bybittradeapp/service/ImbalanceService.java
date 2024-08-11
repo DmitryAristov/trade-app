@@ -3,85 +3,87 @@ package org.bybittradeapp.service;
 import org.bybittradeapp.domain.Imbalance;
 import org.bybittradeapp.domain.MarketKlineEntry;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.Map;
-import java.util.Optional;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
+import java.util.List;
 
 public class ImbalanceService {
     // TODO: implement volatility dependency
-    private static final long SEARCH_PERIOD = 12L;
+    private static final int SEARCH_PERIOD = 720;
     private static final double BTC_PRICE_THRESHOLD = 4000.0;
+    private static final long IMBALANCE_COMPLETE_THRESHOLD = 3600000L;
     private final MarketDataService marketDataService;
-
-    private Imbalance lastImbalance;
+    private final ArrayList<Imbalance> imbalances = new ArrayList<>();
 
     public ImbalanceService(MarketDataService marketDataService) {
         this.marketDataService = marketDataService;
     }
 
-    public Imbalance getImbalance(int fromElement) {
-        TreeMap<Long, MarketKlineEntry> marketData =
-                marketDataService.getMarketData()
-                        .entrySet()
-                        .stream()
-                        .skip(fromElement)
-                        .limit(SEARCH_PERIOD * 60L / marketDataService.getMarketInterval())
-                        .collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                Map.Entry::getValue,
-                                (oldValue, newValue) -> oldValue,
-                                TreeMap::new
-                        ));
-        Imbalance imbalance = getImbalance(marketData);
-        return imbalance;
+    public void getImbalance(int fromElement) {
+        if (marketDataService.getMarketData().size() < fromElement + SEARCH_PERIOD) {
+            return;
+        }
+        List<MarketKlineEntry> marketData = marketDataService.getMarketData()
+                .subList(fromElement, fromElement + SEARCH_PERIOD);
+        checkImbalance(marketData);
     }
 
-    private void setImbalanceStatus(Imbalance imbalance) {
-        if (imbalance == null) {
+    private void checkImbalance(@NotNull List<MarketKlineEntry> marketData) {
+        MarketKlineEntry maxPrice = marketData.stream()
+                .max(Comparator.comparing(MarketKlineEntry::getHighPrice))
+                .orElse(null);
+
+        MarketKlineEntry minPrice = marketData.stream()
+                .min(Comparator.comparing(MarketKlineEntry::getLowPrice))
+                .orElse(null);
+        if (maxPrice == null || minPrice == null) {
             return;
         }
 
-        // TODO check last N hours volatility (or last N hours not changed min/max).
-        //  if it is lower then ... - FINISHED. Otherwise PROGRESS.
-        imbalance.setStatus(Imbalance.Status.PROGRESS);
+        if (!imbalances.isEmpty() && imbalances.get(imbalances.size() - 1).getStatus() == Imbalance.Status.PROGRESS) {
+
+            if (imbalances.get(imbalances.size() - 1).getType() == Imbalance.Type.UP) {
+                if (maxPrice.getHighPrice() > imbalances.get(imbalances.size() - 1).getMax().getHighPrice()) {
+                    imbalances.get(imbalances.size() - 1).setMax(maxPrice);
+                }
+                if (marketData.get(imbalances.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMax().getStartTime() > IMBALANCE_COMPLETE_THRESHOLD) {
+                    imbalances.get(imbalances.size() - 1).setStatus(Imbalance.Status.COMPLETE);
+                }
+            } else {
+                if (minPrice.getLowPrice() < imbalances.get(imbalances.size() - 1).getMin().getLowPrice()) {
+                    imbalances.get(imbalances.size() - 1).setMin(minPrice);
+                }
+                if (marketData.get(imbalances.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMin().getStartTime() > IMBALANCE_COMPLETE_THRESHOLD) {
+                    imbalances.get(imbalances.size() - 1).setStatus(Imbalance.Status.COMPLETE);
+                }
+            }
+
+        } else {
+            if (!imbalances.isEmpty() && imbalances.get(imbalances.size() - 1).getStatus() == Imbalance.Status.COMPLETE &&
+                    ((imbalances.get(imbalances.size() - 1).getType() == Imbalance.Type.UP &&
+                            marketData.get(0).getStartTime() < imbalances.get(imbalances.size() - 1).getMax().getStartTime())
+                            ||
+                            (imbalances.get(imbalances.size() - 1).getType() == Imbalance.Type.DOWN &&
+                                    marketData.get(0).getStartTime() < imbalances.get(imbalances.size() - 1).getMin().getStartTime()))
+            ) {
+                return;
+            }
+
+            if (maxPrice.getHighPrice() - minPrice.getLowPrice() > BTC_PRICE_THRESHOLD) {
+                Imbalance imbalance = new Imbalance(minPrice, maxPrice);
+                imbalance.setStatus(Imbalance.Status.PROGRESS);
+                if (minPrice.getStartTime() > maxPrice.getStartTime()) {
+                    imbalance.setType(Imbalance.Type.DOWN);
+                } else {
+                    imbalance.setType(Imbalance.Type.UP);
+                }
+                imbalances.add(imbalance);
+            }
+        }
     }
 
-    /**
-     * Check if imbalance is present in provided prices map
-     * @return Pair of MIN and MAX market entries which has difference greater then threshold
-     */
-    private @Nullable Imbalance getImbalance(@NotNull TreeMap<Long, MarketKlineEntry> map) {
-        Optional<MarketKlineEntry> marketKlineEntryMaxPriceOpt = map.values().stream()
-                .max(Comparator.comparing(MarketKlineEntry::getHighPrice));
-        if (marketKlineEntryMaxPriceOpt.isEmpty()) {
-            return null;
-        }
-        MarketKlineEntry marketKlineEntryMaxPrice = marketKlineEntryMaxPriceOpt.get();
-        double maxPrice = marketKlineEntryMaxPrice.getHighPrice();
-
-        Optional<MarketKlineEntry> marketKlineEntryMinPriceOpt = map.values().stream()
-                .min(Comparator.comparing(MarketKlineEntry::getLowPrice));
-        if (marketKlineEntryMinPriceOpt.isEmpty()) {
-            return null;
-        }
-        MarketKlineEntry marketKlineEntryMinPrice = marketKlineEntryMinPriceOpt.get();
-        double minPrice = marketKlineEntryMinPrice.getLowPrice();
-
-        // Check if the price difference exceeds the threshold
-        if (maxPrice - minPrice > BTC_PRICE_THRESHOLD) {
-            Imbalance imbalance = new Imbalance(marketKlineEntryMinPrice, marketKlineEntryMaxPrice);
-            if (marketKlineEntryMinPrice.getStartTime() > marketKlineEntryMaxPrice.getStartTime()) {
-                imbalance.setType(Imbalance.Type.DOWN);
-            } else {
-                imbalance.setType(Imbalance.Type.UP);
-            }
-            imbalance.setStatus(Imbalance.Status.PROGRESS);
-            return imbalance;
-        }
-        return null;
+    public List<Imbalance> getImbalances() {
+        return imbalances;
     }
 }

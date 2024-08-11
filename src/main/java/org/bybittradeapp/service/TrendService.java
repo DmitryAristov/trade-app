@@ -1,7 +1,5 @@
 package org.bybittradeapp.service;
 
-import org.bybittradeapp.domain.Trend;
-
 public class TrendService {
 
     private final MarketDataService marketDataService;
@@ -10,7 +8,7 @@ public class TrendService {
         this.marketDataService = marketDataService;
     }
 
-    public Trend getTrend(int fromElement) {
-        return null;
+    public int getTrend(int fromElement) {
+        return 0;
     }
 }

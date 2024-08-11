@@ -1,35 +1,41 @@
 package org.bybittradeapp;
 
+import com.bybit.api.client.domain.market.MarketInterval;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import org.bybittradeapp.serializers.ColorSerializer;
+import org.bybittradeapp.domain.Imbalance;
+import org.bybittradeapp.domain.MarketKlineEntry;
+import org.bybittradeapp.domain.Zone;
+import org.bybittradeapp.service.ImbalanceService;
 import org.bybittradeapp.service.MarketDataService;
-import org.bybittradeapp.service.StrategyService;
+import org.bybittradeapp.service.MinMaxService;
 import org.bybittradeapp.service.UIService;
+import org.bybittradeapp.utils.JsonUtils;
 
-import java.awt.Color;
+import java.util.List;
 
 public class Main {
 
-    public static final boolean TEST_OPTION = true;
+    public static final int DAYS_TO_CHECK = 200;
     public static final ObjectMapper mapper = new ObjectMapper();
 
     private static final MarketDataService marketDataService = new MarketDataService();
-    public static final UIService uiService = new UIService();
+    private static final UIService uiService = new UIService(MarketInterval.FOUR_HOURLY);
+    private static final ImbalanceService imbalanceService = new ImbalanceService(marketDataService);
+    private static final MinMaxService mmService = new MinMaxService(marketDataService);
 
     public static void main(String[] args) {
-        registerModules();
-        uiService.start();
-        marketDataService.start();
+        uiService.updateMarketData();
+        marketDataService.updateMarketData();
 
-        if (TEST_OPTION) {
-            uiService.updateAnalysedDataJson(StrategyService.zones, StrategyService.imbalances, StrategyService.trend);
+        List<Zone> zones = mmService.getZones();
+        for (int i = 0; i < marketDataService.getMarketData().size(); i++) {
+            if (i % 1000 == 0)
+                System.out.println("check imb for i " + i);
+            imbalanceService.getImbalance(i);
         }
-    }
+        List<Imbalance> imbalances = imbalanceService.getImbalances();
+        List<MarketKlineEntry> uiMarketData = uiService.getUiMarketData();
 
-    private static void registerModules() {
-        SimpleModule module = new SimpleModule();
-        module.addSerializer(Color.class, new ColorSerializer());
-        mapper.registerModule(module);
+        JsonUtils.updateAnalysedDataJson(zones, imbalances, uiMarketData);
     }
 }

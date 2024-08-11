@@ -18,50 +18,26 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.TreeMap;
-import java.util.stream.Collectors;
 
-import static org.bybittradeapp.Main.TEST_OPTION;
+import static org.bybittradeapp.Main.DAYS_TO_CHECK;
 import static org.bybittradeapp.Main.mapper;
 
 public class MarketDataService {
-    private static final long START_TIMESTAMP = Instant.now().minus(60, ChronoUnit.DAYS).toEpochMilli();
+    private static final long START_TIMESTAMP = Instant.now().minus(DAYS_TO_CHECK, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
     private static final String PATH_RESOURCES = "C:\\Users\\dimas\\IdeaProjects\\bybit-trade-app\\src\\main\\resources";
 
-    private final MarketInterval marketInterval = MarketInterval.ONE_MINUTE;
-    private final TreeMap<Long, MarketKlineEntry> marketData = _deserialize();
-    private final Timer timer = new Timer();
-    private final StrategyService strategyService = new StrategyService(this);
-
-    public void start() {
-        if (TEST_OPTION) {
-            updateMarketData();
-            strategyService.performCheck();
-        } else {
-            TimerTask task = new TimerTask() {
-                @Override
-                public void run() {
-                    updateMarketData();
-                    strategyService.performCheck();
-                }
-            };
-            timer.scheduleAtFixedRate(task, 0, 45000L);
-        }
-    }
-
-    public void stop() {
-        timer.cancel();
-    }
+    private final ArrayList<MarketKlineEntry> marketData = _deserialize();
 
     public void updateMarketData() {
-        Long latestSavedElement = marketData.keySet().stream()
-                .max(Comparator.comparing(Long::longValue))
-                .orElse(null);
+        Long latestSavedElement = null;
+        if (!marketData.isEmpty()) {
+            latestSavedElement = marketData.get(marketData.size() - 1).getStartTime();
+            System.out.println("last market data " + Instant.ofEpochMilli(latestSavedElement));
+        }
         getMarketDataProcess(latestSavedElement);
     }
 
@@ -92,7 +68,7 @@ public class MarketDataService {
             MarketDataRequest marketKLineRequest = MarketDataRequest.builder()
                     .category(CategoryType.LINEAR)
                     .symbol("BTCUSDT")
-                    .marketInterval(marketInterval)
+                    .marketInterval(MarketInterval.ONE_MINUTE)
                     .start(latestSavedElementTimestamp)
                     .limit(limit)
                     .build();
@@ -102,19 +78,18 @@ public class MarketDataService {
             var marketKlineResultGenericResponse = mapper.convertValue(marketKlineResultRaw, GenericResponse.class);
             var marketKlineResult = mapper.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
 
-            marketData.putAll(
+            marketData.addAll(
                     marketKlineResult.getMarketKlineEntries()
                             .stream()
-                            .collect(Collectors.toMap(
-                                    com.bybit.api.client.domain.market.response.kline.MarketKlineEntry::getStartTime,
-                                    MarketDataService::toMarketKlineEntry
-                            ))
-            );
+                            .map(MarketDataService::toMarketKlineEntry)
+                            .toList());
+            System.out.println("market data size " + marketData.size());
 
             latestSavedElementTimestamp = marketKlineResult.getMarketKlineEntries().get(0).getStartTime();
 
             if (marketKlineResult.getMarketKlineEntries().size() < MAX_ROWS_LIMIT) {
-                _serialize();
+                marketData.sort(Comparator.comparing(MarketKlineEntry::getStartTime));
+                _serialize(marketData);
                 isInProcess = false;
             }
         }
@@ -124,24 +99,12 @@ public class MarketDataService {
     public static MarketKlineEntry toMarketKlineEntry(@NotNull com.bybit.api.client.domain.market.response.kline.MarketKlineEntry entry) {
         MarketKlineEntry result = new MarketKlineEntry();
         result.setStartTime(entry.getStartTime());
-        result.setOpenPrice(Double.parseDouble(entry.getOpenPrice()));
-        result.setClosePrice(Double.parseDouble(entry.getClosePrice()));
         result.setHighPrice(Double.parseDouble(entry.getHighPrice()));
         result.setLowPrice(Double.parseDouble(entry.getLowPrice()));
         return result;
     }
 
-    public Long getMarketInterval() {
-        if (!List.of("D", "W", "M").contains(marketInterval.getIntervalId()))
-            return Long.parseLong(marketInterval.getIntervalId());
-        else return 1L;
-    }
-
-    public TreeMap<Long, MarketKlineEntry> getMarketData() {
-        return marketData;
-    }
-
-    private void _serialize() {
+    private void _serialize(List<MarketKlineEntry> marketData) {
         try {
             try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "\\data");
                  ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)) {
@@ -154,13 +117,17 @@ public class MarketDataService {
     }
 
     @SuppressWarnings("unchecked")
-    private TreeMap<Long, MarketKlineEntry> _deserialize() {
+    private ArrayList<MarketKlineEntry> _deserialize() {
         try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "\\data");
              ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)) {
             System.out.println("marketData deserialized");
-            return (TreeMap<Long, MarketKlineEntry>) objectInputStream.readObject();
+            return (ArrayList<MarketKlineEntry>) objectInputStream.readObject();
         } catch (IOException | ClassNotFoundException e) {
-            return new TreeMap<>();
+            return new ArrayList<>();
         }
+    }
+
+    public ArrayList<MarketKlineEntry> getMarketData() {
+        return marketData;
     }
 }
