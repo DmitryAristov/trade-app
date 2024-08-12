@@ -15,7 +15,7 @@ import java.util.List;
 
 public class Main {
 
-    public static final int DAYS_TO_CHECK = 200;
+    public static final int DAYS_TO_CHECK = 60;
     public static final ObjectMapper mapper = new ObjectMapper();
 
     private static final MarketDataService marketDataService = new MarketDataService();
@@ -34,7 +34,7 @@ public class Main {
             imbalanceService.getImbalance(i);
         }
         List<Imbalance> imbalances = imbalanceService.getImbalances();
-        List<MarketKlineEntry> uiMarketData = uiService.getUiMarketData();
+        List<MarketKlineEntry> uiMarketData = uiService.getMarketData();
 
         JsonUtils.updateAnalysedDataJson(extrema, imbalances, uiMarketData);
     }

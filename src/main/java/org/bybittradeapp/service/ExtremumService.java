@@ -14,7 +14,8 @@ import java.util.Optional;
 
 public class ExtremumService {
 
-    private static final int DETECT_LENGTH = 10 * 60;
+    private static final int MIN_MAX_DETECT_ON_MARKET_DATA_POINTS = 10 * 60;
+    private static final int MIN_MAX_SEARCH_ON_MA_POINTS = 100;
     private static final double MIN_PRICE_DIFF = 1000.;
 
     private final MarketDataService marketDataService;
@@ -35,15 +36,15 @@ public class ExtremumService {
          * with several steps.
          */
         Map<Long, Double> average = movingAverage(marketData, 600);
-        List<Extremum> extremums = findExtremums(average, 100);
+        List<Extremum> extremums = findExtremums(average);
         System.out.println("Initially found " + extremums.size() + " extremums");
 
 
-        List<Extremum> extremums500 = mapExtremumsToNewMa(marketData, extremums, 500, 100);
-        List<Extremum> extremums400 = mapExtremumsToNewMa(marketData, extremums500, 400, 100);
-        List<Extremum> extremums300 = mapExtremumsToNewMa(marketData, extremums400, 300, 100);
-        List<Extremum> extremums200 = mapExtremumsToNewMa(marketData, extremums300, 200, 50);
-        List<Extremum> extremums100 = mapExtremumsToNewMa(marketData, extremums200, 100, 50);
+        List<Extremum> extremums500 = mapExtremumsToNewMa(marketData, extremums, 500);
+        List<Extremum> extremums400 = mapExtremumsToNewMa(marketData, extremums500, 400);
+        List<Extremum> extremums300 = mapExtremumsToNewMa(marketData, extremums400, 300);
+        List<Extremum> extremums200 = mapExtremumsToNewMa(marketData, extremums300, 200);
+        List<Extremum> extremums100 = mapExtremumsToNewMa(marketData, extremums200, 100);
         System.out.println("After all mappings we have " + extremums100.size() + " extremums");
 
         List<Extremum> extrema = new ArrayList<>();
@@ -60,8 +61,8 @@ public class ExtremumService {
                         .findFirst()
                         .ifPresent(indexOfKey -> {
                             if (extremum.getType() == Extremum.Type.MAX) {
-                                MarketKlineEntry max = marketData.get(Math.max(indexOfKey - DETECT_LENGTH, 0));
-                                for (int i = Math.max(indexOfKey - DETECT_LENGTH, 0); i < Math.min(indexOfKey + DETECT_LENGTH, marketData.size() - 1); i++) {
+                                MarketKlineEntry max = marketData.get(Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0));
+                                for (int i = Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0); i < Math.min(indexOfKey + MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, marketData.size() - 1); i++) {
                                     if (marketData.get(i).getHighPrice() > max.getHighPrice()) {
                                         max = marketData.get(i);
                                     }
@@ -71,8 +72,8 @@ public class ExtremumService {
                                 }
                             }
                             if (extremum.getType() == Extremum.Type.MIN) {
-                                MarketKlineEntry min = marketData.get(Math.max(indexOfKey - DETECT_LENGTH, 0));
-                                for (int i = Math.max(indexOfKey - DETECT_LENGTH, 0); i < Math.min(indexOfKey + DETECT_LENGTH, marketData.size() - 1); i++) {
+                                MarketKlineEntry min = marketData.get(Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0));
+                                for (int i = Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0); i < Math.min(indexOfKey + MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, marketData.size() - 1); i++) {
                                     if (marketData.get(i).getLowPrice() < min.getLowPrice()) {
                                         min = marketData.get(i);
                                     }
@@ -90,25 +91,23 @@ public class ExtremumService {
         System.out.println("After mapping to market data we have " + extremums100.size() + " extremums");
 
         System.out.println("Start filtering...");
+        do {
+            removeSeveralOneTypeExtremums(extrema);
+            removeMinHigherThanMax(marketData, extrema);
+            removeExtremumsByPriceThreshold(extrema);
+        } while (extremaAreNotCorrect(extrema));
 
-        removeSeveralOneTypeExtremums(extrema);
-        removeMinHigherThanMax(marketData, extrema);
-        removeExtremumsByPriceThreshold(extrema);
-        removeSeveralOneTypeExtremums(extrema);
-        removeMinHigherThanMax(marketData, extrema);
         correctExtremumsIfThereOneIsBetween(marketData, extrema);
+        System.out.println("Found " + extrema.size() + " extremums");
 
-        List<Extremum> result = extrema.stream().distinct().toList();
-        System.out.println("Found " + result.size() + " extremums (" + extrema.size() + ")");
-
-        return result;
+        return extrema;
     }
 
     /**
      * In some cases between MIN and MAX we have MIN (or MAX) which is lower (or higher) than founded one
      * In this case we need to update its price and timestamp to the right ones.
      */
-    private static void correctExtremumsIfThereOneIsBetween(ArrayList<MarketKlineEntry> marketData, List<Extremum> extrema) {
+    private void correctExtremumsIfThereOneIsBetween(ArrayList<MarketKlineEntry> marketData, List<Extremum> extrema) {
 
         for (int i = 1; i < extrema.size(); i++) {
             if (extrema.get(i - 1).getType() == extrema.get(i).getType()) {
@@ -149,7 +148,7 @@ public class ExtremumService {
      * This step we remove maximums and minimums that has not enough minimum price difference,
      * Example we convert { MAX (100), MIN (90), MAX (91), MIN (60) } -> { MAX (100), MIN (60) }
      */
-    private static void removeExtremumsByPriceThreshold(List<Extremum> extrema) {
+    private void removeExtremumsByPriceThreshold(List<Extremum> extrema) {
         List<Extremum> toRemove;
 
         do {
@@ -182,7 +181,7 @@ public class ExtremumService {
      * This step we remove maximum < minimum and minimum > maximum pairs
      * Example we convert { MAX (100), MIN (90), MAX (80), MIN (70) } -> { MAX (100), MIN (70) }
      */
-    private static void removeMinHigherThanMax(List<MarketKlineEntry> marketData, List<Extremum> extrema) {
+    private void removeMinHigherThanMax(List<MarketKlineEntry> marketData, List<Extremum> extrema) {
         List<Extremum> toRemove;
 
         do {
@@ -235,7 +234,7 @@ public class ExtremumService {
      * This step we remove one type extremums which are goes one by one (only MAX or MIN),
      * Example we convert { MAX (100), MAX (80), MAX (130), MIN (60) } -> { MAX (130), MIN (60) }
      */
-    private static void removeSeveralOneTypeExtremums(List<Extremum> extrema) {
+    private void removeSeveralOneTypeExtremums(List<Extremum> extrema) {
         List<Extremum> toRemove;
         do {
             toRemove = new ArrayList<>();
@@ -265,9 +264,9 @@ public class ExtremumService {
 
     @NotNull
     private List<Extremum> mapExtremumsToNewMa(ArrayList<MarketKlineEntry> marketData, List<Extremum> extremumsIn,
-                                               int maPointCount, int avPointCount) {
+                                               int maPointCount) {
         Map<Long, Double> average = movingAverage(marketData, maPointCount);
-        List<Extremum> extremums = findExtremums(average, avPointCount);
+        List<Extremum> extremums = findExtremums(average);
 
         return extremumsIn.stream().map(extremumIn -> extremums.stream()
                         .min(Comparator.comparing(extremum ->
@@ -307,7 +306,7 @@ public class ExtremumService {
         return result;
     }
 
-    public static List<Extremum> findExtremums(Map<Long, Double> maData, int pointCount) {
+    public static List<Extremum> findExtremums(Map<Long, Double> maData) {
         ArrayList<Extremum> extremums = new ArrayList<>();
 
         List<Map.Entry<Long, Double>> entryList = new ArrayList<>(maData.entrySet());
@@ -315,13 +314,13 @@ public class ExtremumService {
 
         int size = entryList.size();
 
-        for (int i = pointCount; i < size - pointCount; i++) {
+        for (int i = MIN_MAX_SEARCH_ON_MA_POINTS; i < size - MIN_MAX_SEARCH_ON_MA_POINTS; i++) {
             double value = entryList.get(i).getValue();
             long key = entryList.get(i).getKey();
             boolean isMaximum = true;
             boolean isMinimum = true;
 
-            for (int j = 1; j <= pointCount; j++) {
+            for (int j = 1; j <= MIN_MAX_SEARCH_ON_MA_POINTS; j++) {
                 double prevValue = entryList.get(i - j).getValue();
                 double nextValue = entryList.get(i + j).getValue();
 
@@ -345,5 +344,30 @@ public class ExtremumService {
             }
         }
         return extremums;
+    }
+
+    private boolean extremaAreNotCorrect( List<Extremum> extrema) {
+        for (int i = 2; i <= extrema.size(); i++) {
+            final Extremum prev = extrema.get(i - 2);
+            final Extremum curr = extrema.get(i - 1);
+            if (curr.getType() == Extremum.Type.MAX &&
+                    prev.getType() == Extremum.Type.MAX) {
+                return true;
+            }
+            if (curr.getType() == Extremum.Type.MIN &&
+                    prev.getType() == Extremum.Type.MIN) {
+                return true;
+            }
+            if (prev.getType() == Extremum.Type.MAX) {
+                if (curr.getPrice() > prev.getPrice()) {
+                    return true;
+                }
+            } else {
+                if (curr.getPrice() < prev.getPrice()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 }

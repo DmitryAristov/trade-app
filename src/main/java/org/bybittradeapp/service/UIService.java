@@ -103,7 +103,7 @@ public class UIService {
         return result;
     }
 
-    public ArrayList<MarketKlineEntry> getUiMarketData() {
+    public ArrayList<MarketKlineEntry> getMarketData() {
         return uiMarketData;
     }
 }
