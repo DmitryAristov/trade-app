@@ -21,13 +21,13 @@ import static org.bybittradeapp.Main.SYMBOL;
 import static org.bybittradeapp.Main.mapper;
 import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketDataJson;
 
-public class UIService {
+public class UiDataService {
     private static final long START_TIMESTAMP = Instant.now().minus(HISTORICAL_DATA_SIZE, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
     private final ArrayList<MarketKlineEntry> uiMarketData = new ArrayList<>();
     private final MarketInterval marketInterval;
 
-    public UIService(MarketInterval marketInterval) {
+    public UiDataService(MarketInterval marketInterval) {
         this.marketInterval = marketInterval;
     }
 

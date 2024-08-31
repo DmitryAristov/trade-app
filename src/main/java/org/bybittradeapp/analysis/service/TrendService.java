@@ -9,9 +9,11 @@ public class TrendService {
     public enum Trend { UP, NEUTRAL, DOWN }
 
     private final List<MarketKlineEntry> marketData;
+    private final VolatilityService volatilityService;
 
-    public TrendService(List<MarketKlineEntry> marketData) {
+    public TrendService(List<MarketKlineEntry> marketData, VolatilityService volatilityService) {
         this.marketData = marketData;
+        this.volatilityService = volatilityService;
     }
 
     public Trend getTrend(int fromElement) {

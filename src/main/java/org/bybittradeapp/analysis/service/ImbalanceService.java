@@ -72,7 +72,7 @@ public class ImbalanceService {
                     imbalances.get(imbalances.size() - 1).setMax(maxPrice);
                 }
                 // Если максимум не обновлялся IMBALANCE_COMPLETE_TIME -> считаем его завершенным
-                if (marketData.get(imbalances.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMax().getStartTime() > IMBALANCE_COMPLETE_TIME) {
+                if (marketData.get(marketData.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMax().getStartTime() > IMBALANCE_COMPLETE_TIME) {
                     imbalances.get(imbalances.size() - 1).setStatus(Imbalance.Status.COMPLETE);
                 }
             } else {
@@ -83,7 +83,7 @@ public class ImbalanceService {
                     imbalances.get(imbalances.size() - 1).setMin(minPrice);
                 }
                 // Если минимум не обновлялся IMBALANCE_COMPLETE_TIME -> считаем его завершенным
-                if (marketData.get(imbalances.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMin().getStartTime() > IMBALANCE_COMPLETE_TIME) {
+                if (marketData.get(marketData.size() - 1).getStartTime() - imbalances.get(imbalances.size() - 1).getMin().getStartTime() > IMBALANCE_COMPLETE_TIME) {
                     imbalances.get(imbalances.size() - 1).setStatus(Imbalance.Status.COMPLETE);
                 }
             }

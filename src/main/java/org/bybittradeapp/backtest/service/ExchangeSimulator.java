@@ -67,16 +67,16 @@ public class ExchangeSimulator implements Tickle {
                     switch (position.getOrder().getType()) {
                         case LONG -> {
                             if (position.getTakeProfit() <= entry.getHighPrice()) {
-                                closePosition(position);
+                                closePosition(position, entry);
                             } else if (position.getStopLoss() >= entry.getLowPrice()) {
-                                closePosition(position);
+                                closePosition(position, entry);
                             }
                         }
                         case SHORT -> {
                             if (position.getTakeProfit() >= entry.getLowPrice()) {
-                                closePosition(position);
+                                closePosition(position, entry);
                             } else if (position.getStopLoss() <= entry.getHighPrice()) {
-                                closePosition(position);
+                                closePosition(position, entry);
                             }
                         }
                     }
@@ -88,15 +88,15 @@ public class ExchangeSimulator implements Tickle {
         openPosition(order, order.getPrice());
     }
 
-    private void openPosition(Order order, double closePrice) {
-        Position position = new Position(order, closePrice, account.calculatePositionSize());
+    private void openPosition(Order order, double openPrice) {
+        Position position = new Position(order, openPrice, account.calculatePositionSize());
         positions.add(position);
         System.out.println("Position is opened: " + position.toString());
     }
 
-    private void closePosition(Position position) {
+    private void closePosition(Position position, MarketKlineEntry entry) {
+        position.close(entry.getPrice());
         System.out.println("Position " + position.toString() + " is closed with TP&SL: " + position.getProfitLoss());
-        position.close(position.getTakeProfit());
         account.updateBalance(position.getProfitLoss());
     }
 

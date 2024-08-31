@@ -6,13 +6,17 @@ public class Position {
     private final double takeProfit;
     private final double stopLoss;
     private double closePrice;
+
+    /**
+     * position size (in BTC)
+     */
     private final double amount;
     private boolean isOpen = true;
 
-    public Position(Order order, double openPrice, double amount) {
+    public Position(Order order, double openPrice, double amountOfMoney) {
         this.order = order;
         this.openPrice = openPrice;
-        this.amount = amount;
+        this.amount = amountOfMoney / openPrice;
         this.takeProfit = order.getTakeProfit();
         this.stopLoss = order.getStopLoss();
     }
@@ -30,8 +34,8 @@ public class Position {
      */
     public double getProfitLoss() {
         return switch (order.getType()) {
-            case LONG -> (closePrice - openPrice) * (amount / openPrice);
-            case SHORT -> (openPrice - closePrice) * (amount / openPrice);
+            case LONG -> (closePrice - openPrice) * amount;
+            case SHORT -> (openPrice - closePrice) * amount;
         };
     }
 

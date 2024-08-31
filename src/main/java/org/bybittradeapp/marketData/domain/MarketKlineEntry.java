@@ -5,9 +5,11 @@ import java.time.Instant;
 
 public class MarketKlineEntry implements Serializable {
     private long startTime;
-    private double openPrice;
     private double highPrice;
     private double lowPrice;
+
+    // UI purposes only
+    private double openPrice;
     private double closePrice;
 
     public long getStartTime() {
@@ -58,5 +60,9 @@ public class MarketKlineEntry implements Serializable {
                 ", highPrice='" + highPrice + '\'' +
                 ", lowPrice='" + lowPrice + '\'' +
                 '}';
+    }
+
+    public double getPrice() {
+        return (this.highPrice + this.lowPrice) / 2.;
     }
 }
