@@ -8,7 +8,7 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
+import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -21,6 +21,7 @@ import static org.bybittradeapp.Main.mapper;
 public class VolatilityService {
 
     private double volatility = 0;
+    private double average = 0;
 
     /**
      * Method returns volatility of provided marked data in percents
@@ -31,13 +32,16 @@ public class VolatilityService {
             return;
         }
 
+        double sum = 0;
         List<Double> changes = new ArrayList<>();
         for (MarketKlineEntry marketDatum : marketData) {
             double priceDiff = marketDatum.getHighPrice() - marketDatum.getLowPrice();
             double priceAverage = (marketDatum.getHighPrice() + marketDatum.getLowPrice()) / 2.;
+            sum += priceAverage;
             changes.add(priceDiff / priceAverage);
         }
-        this.volatility = changes.stream().reduce(0., Double::sum) / changes.size() * 100.;
+        this.volatility = changes.stream().reduce(0., Double::sum) / changes.size();
+        this.average = sum / marketData.size();
     }
 
     private List<MarketKlineEntry> getDailyMarketData() {
@@ -79,5 +83,9 @@ public class VolatilityService {
 
     public double getVolatility() {
         return volatility;
+    }
+
+    public double getAverage() {
+        return average;
     }
 }

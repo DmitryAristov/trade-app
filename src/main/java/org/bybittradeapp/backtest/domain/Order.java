@@ -1,13 +1,11 @@
 package org.bybittradeapp.backtest.domain;
 
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
+import java.io.Serializable;
 
-public class Order {
-    public enum OrderType { LONG, SHORT }
-    public enum ExecutionType { MARKET, LIMIT }
+public class Order implements Serializable {
 
-    private final OrderType type;
-    private final ExecutionType executionType;
+    private OrderType type;
+    private ExecutionType executionType;
     private double price;
     private boolean filled = false;
     private boolean canceled = false;
@@ -15,10 +13,7 @@ public class Order {
     private double stopLoss = -1;
     private long createTime;
 
-    public Order(OrderType type, ExecutionType executionType) {
-        this.type = type;
-        this.executionType = executionType;
-    }
+    public Order() { }
 
     /**
      * Ордер исполнен
@@ -37,11 +32,11 @@ public class Order {
     /**
      * Проверяет если лимитный ордер можно исполнить
      */
-    public boolean isExecutable(MarketKlineEntry entry) {
-        if (this.getType() == Order.OrderType.LONG) {
-            return this.getPrice() >= entry.getLowPrice();
+    public boolean isExecutable(long time, double price) {
+        if (this.getType() == OrderType.LONG) {
+            return this.getPrice() >= price;
         } else {
-            return this.getPrice() <= entry.getHighPrice();
+            return this.getPrice() <= price;
         }
     }
 
@@ -93,15 +88,12 @@ public class Order {
         this.createTime = createTime;
     }
 
-    @Override
-    public String toString() {
-        return "Order{" +
-                "type=" + type +
-                ", executionType=" + executionType +
-                ", price=" + price +
-                ", takeProfit=" + takeProfit +
-                ", stopLoss=" + stopLoss +
-                '}';
+    public void setType(OrderType type) {
+        this.type = type;
+    }
+
+    public void setExecutionType(ExecutionType executionType) {
+        this.executionType = executionType;
     }
 }
 

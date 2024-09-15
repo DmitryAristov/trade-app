@@ -1,14 +1,19 @@
 package org.bybittradeapp.backtest.service;
 
 import org.bybittradeapp.backtest.domain.Account;
+import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
 import org.bybittradeapp.backtest.domain.Position;
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
+import org.bybittradeapp.logging.Log;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
+
+import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
 public class ExchangeSimulator implements Tickle {
     private final List<Order> limitOrders;
@@ -22,35 +27,39 @@ public class ExchangeSimulator implements Tickle {
     }
 
     @Override
-    public void onTick(MarketKlineEntry entry) {
-        executeLimitOrders(entry);
-        checkAndClosePositions(entry);
+    public void onTick(long time, double price) {
+        executeLimitOrders(time, price);
+        checkAndClosePositions(time, price);
     }
 
     /**
      * Лимитные ордера добавляем в список для отслеживания
      * Рыночные ордера исполняем сразу
      */
-    public void submitOrder(Order order) {
-        System.out.println("Order is placed: " + order.toString());
-        if (order.getExecutionType() == Order.ExecutionType.MARKET) {
-            executeMarketOrder(order);
+    public void submitOrder(Order order, long time) {
+        if (order.getExecutionType() == ExecutionType.MARKET) {
+            executeMarketOrder(order, time);
         } else {
             limitOrders.add(order);
         }
+    }
+
+    private void executeMarketOrder(Order order, long time) {
+        order.fill();
+        openPosition(order, time, order.getPrice());
     }
 
     /**
      * Если ордер не исполнен, не отменен и если он может быть исполнен ->
      * ордер становится исполнен, добавляем открытую позицию
      */
-    private void executeLimitOrders(MarketKlineEntry entry) {
+    private void executeLimitOrders(long time, double price) {
         Iterator<Order> iterator = limitOrders.iterator();
         while (iterator.hasNext()) {
             Order order = iterator.next();
-            if (!order.isFilled() && !order.isCanceled() && order.isExecutable(entry)) {
+            if (!order.isFilled() && !order.isCanceled() && order.isExecutable(time, price)) {
                 order.fill();
-                openPosition(order, entry.getClosePrice());
+                openPosition(order, time, price);
                 iterator.remove();
             }
         }
@@ -60,48 +69,48 @@ public class ExchangeSimulator implements Tickle {
      * Если открытая позиция достигает стоп лосса или тейк профита ->
      * закрываем и обновляем депозит
      */
-    private void checkAndClosePositions(MarketKlineEntry entry) {
+    private void checkAndClosePositions(long time, double price) {
         positions.stream()
                 .filter(Position::isOpen)
                 .forEach(position -> {
                     switch (position.getOrder().getType()) {
                         case LONG -> {
-                            if (position.getTakeProfit() <= entry.getHighPrice()) {
-                                closePosition(position, entry);
-                            } else if (position.getStopLoss() >= entry.getLowPrice()) {
-                                closePosition(position, entry);
+                            if (position.getTakeProfit() <= price) {
+                                closePosition(position, account, time, price);
+                            } else if (position.getStopLoss() >= price) {
+                                closePosition(position, account, time, price);
                             }
                         }
                         case SHORT -> {
-                            if (position.getTakeProfit() >= entry.getLowPrice()) {
-                                closePosition(position, entry);
-                            } else if (position.getStopLoss() <= entry.getHighPrice()) {
-                                closePosition(position, entry);
+                            if (position.getTakeProfit() >= price) {
+                                closePosition(position, account, time, price);
+                            } else if (position.getStopLoss() <= price) {
+                                closePosition(position, account, time, price);
                             }
                         }
                     }
                 });
     }
 
-    private void executeMarketOrder(Order order) {
-        order.fill();
-        openPosition(order, order.getPrice());
-    }
-
-    private void openPosition(Order order, double openPrice) {
-        Position position = new Position(order, openPrice, account.calculatePositionSize());
+    private void openPosition(Order order, long time, double price) {
+        Position position = new Position(order, price, time, account.calculatePositionSize());
         positions.add(position);
-        System.out.println("Position is opened: " + position.toString());
+        Log.log(String.format("%s is opened with price %f on %s", position.getOrder().getType(), price, Instant.ofEpochMilli(time)));
     }
 
-    private void closePosition(Position position, MarketKlineEntry entry) {
-        position.close(entry.getPrice());
-        System.out.println("Position " + position.toString() + " is closed with TP&SL: " + position.getProfitLoss());
+    public static void closePosition(Position position, Account account, long time, double price) {
+        position.close(time, price);
+        Log.log(String.format("%s is closed with PL = ||||   %f   |||| on %s",
+                position.getOrder().getType(), position.getProfitLoss(), Instant.ofEpochMilli(time)));
         account.updateBalance(position.getProfitLoss());
     }
 
     public List<Position> getOpenPositions() {
         return positions.stream().filter(Position::isOpen).collect(Collectors.toList());
+    }
+
+    public List<Position> getPositions() {
+        return positions;
     }
 
     public List<Order> getLimitOrders() {

@@ -8,7 +8,7 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
+import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
@@ -19,7 +19,7 @@ import java.util.Comparator;
 import static org.bybittradeapp.Main.HISTORICAL_DATA_SIZE;
 import static org.bybittradeapp.Main.SYMBOL;
 import static org.bybittradeapp.Main.mapper;
-import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketDataJson;
+import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketData;
 
 public class UiDataService {
     private static final long START_TIMESTAMP = Instant.now().minus(HISTORICAL_DATA_SIZE, ChronoUnit.DAYS).toEpochMilli();
@@ -29,35 +29,24 @@ public class UiDataService {
 
     public UiDataService(MarketInterval marketInterval) {
         this.marketInterval = marketInterval;
+        getMarketDataProcess();
     }
 
-    public void updateMarketData() {
-        Long latestSavedElement = uiMarketData.stream()
-                .map(MarketKlineEntry::getStartTime)
-                .max(Comparator.comparing(Long::longValue))
-                .orElse(null);
-        getMarketDataProcess(latestSavedElement);
-    }
-
-    private void getMarketDataProcess(Long latestSavedElementTimestamp) {
-
-        if (latestSavedElementTimestamp == null) {
-            latestSavedElementTimestamp = START_TIMESTAMP;
-        }
+    private void getMarketDataProcess() {
+        long latestSavedElementTimestamp = START_TIMESTAMP;
 
         BybitApiMarketRestClient client = BybitApiClientFactory
                 .newInstance(BybitApiConfig.MAINNET_DOMAIN, false)
                 .newMarketDataRestClient();
 
-        boolean isInProcess = true;
-        while (isInProcess) {
-            long diffMills = (Instant.now().toEpochMilli() - latestSavedElementTimestamp);
-            double diffFourHours = ((double) diffMills) / (1000. * 60. * 60. * 4.);
+        boolean process = true;
+        while (process) {
+            double unprocessedEntriesCount = ((double) (Instant.now().toEpochMilli() - latestSavedElementTimestamp)) / (double) toMills(marketInterval);
             int limit;
-            if (diffFourHours > 1. && diffFourHours < MAX_ROWS_LIMIT) {
-                limit = (int) Math.ceil(diffFourHours);
-            } else if (diffFourHours <= 1.) {
-                isInProcess = false;
+            if (unprocessedEntriesCount > 1. && unprocessedEntriesCount < MAX_ROWS_LIMIT) {
+                limit = (int) Math.ceil(unprocessedEntriesCount);
+            } else if (unprocessedEntriesCount <= 1.) {
+                process = false;
                 continue;
             } else {
                 limit = MAX_ROWS_LIMIT;
@@ -87,10 +76,28 @@ public class UiDataService {
 
             if (marketKlineResult.getMarketKlineEntries().size() < MAX_ROWS_LIMIT) {
                 uiMarketData.sort(Comparator.comparing(MarketKlineEntry::getStartTime));
-                updateMarketDataJson(uiMarketData);
-                isInProcess = false;
+                updateMarketData(uiMarketData);
+                process = false;
             }
         }
+    }
+
+    private static long toMills(MarketInterval interval) {
+        return switch (interval) {
+            case MONTHLY -> 30L * 24L * 60L * 60L * 1000L;
+            case WEEKLY -> 7L * 24L * 60L * 60L * 1000L;
+            case DAILY -> 24L * 60L * 60L * 1000L;
+            case TWELVE_HOURLY -> 12L * 60L * 60L * 1000L;
+            case SIX_HOURLY -> 6L * 60L * 60L * 1000L;
+            case FOUR_HOURLY -> 4L * 60L * 60L * 1000L;
+            case TWO_HOURLY -> 2L * 60L * 60L * 1000L;
+            case HOURLY -> 60L * 60L * 1000L;
+            case HALF_HOURLY -> 30L * 60L * 1000L;
+            case FIFTEEN_MINUTES -> 15L * 60L * 1000L;
+            case FIVE_MINUTES -> 5L * 60L * 1000L;
+            case THREE_MINUTES -> 3L * 60L * 1000L;
+            case ONE_MINUTE -> 60L * 1000L;
+        };
     }
 
     @NotNull

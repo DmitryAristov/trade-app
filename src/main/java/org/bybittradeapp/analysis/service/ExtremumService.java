@@ -1,30 +1,54 @@
 package org.bybittradeapp.analysis.service;
 
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
 import org.bybittradeapp.analysis.domain.Extremum;
+import org.bybittradeapp.backtest.service.Tickle;
+import org.bybittradeapp.logging.Log;
 import org.jetbrains.annotations.NotNull;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 
-import static org.bybittradeapp.Main.*;
+public class ExtremumService implements Tickle {
+    public static final long MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW = 10L * 60L * 60L * 1000L;
+    public static final long MIN_MAX_SEARCH_ON_MA_TIME_WINDOW = 100L * 60L * 1000L ;
+    public static final long SEARCH_TIME_WINDOW = 60L * 24L * 60L * 60L * 1000L; // 60 seconds * 60 minutes * 24 hours * 60 days
+    public static final double MIN_DIFF_BETWEEN_EXTREMUMS = 0.1;
 
-public class ExtremumService {
-
-    private final int initialMaPointsCount;
+    private final long initialMaTimeWindow;
     private final double minPriceDiff;
-    private final List<MarketKlineEntry> marketData;
+    private TreeMap<Long, Double> data;
+    private final TreeMap<Long, Double> marketData;
 
-    public ExtremumService(List<MarketKlineEntry> marketData, VolatilityService volatilityService) {
+    public ExtremumService(TreeMap<Long, Double> marketData, VolatilityService volatilityService) {
         this.marketData = marketData;
-        double volatility = volatilityService.getVolatility();
-        this.initialMaPointsCount = (int) Math.round(volatility * 120.);
-        this.minPriceDiff = 200 * volatility;
+        this.initialMaTimeWindow = Math.round(volatilityService.getVolatility() * 120L * 60L * 1000L);
+        this.minPriceDiff = volatilityService.getVolatility() * volatilityService.getAverage() * MIN_DIFF_BETWEEN_EXTREMUMS;
+    }
+
+    @Override
+    public void onTick(long time, double price) {
+//        updateData(time, price);
+    }
+
+    private void updateData(long time, double price) {
+        // All market data. Need to filter SEARCH_TIME_WINDOW values only
+        if (data == null) {
+            data = new TreeMap<>(marketData.subMap(time - SEARCH_TIME_WINDOW, true, time, true));
+        } else {
+            data.put(time, price);
+            data.entrySet().removeIf(entry -> time - entry.getKey() > SEARCH_TIME_WINDOW);
+        }
     }
 
     /**
@@ -37,23 +61,23 @@ public class ExtremumService {
          * but they all have wrong timestamp. Tio fix it, we need to map founded extremums on lower MAs
          * with several steps.
          */
-        Map<Long, Double> average = movingAverage(marketData, initialMaPointsCount);
+        TreeMap<Long, Double> average = movingAverage(marketData, initialMaTimeWindow);
         List<Extremum> extremums = findExtremums(average);
-        System.out.println("Initially found " + extremums.size() + " extremums");
+        Log.log("initially found " + extremums.size() + " extremums");
 
-        final int secondCount = (int) Math.round(initialMaPointsCount * 0.8);
+        final long secondCount = Math.round(initialMaTimeWindow * 0.8);
         List<Extremum> extremums500 = mapExtremumsToNewMa(marketData, extremums, secondCount);
-        final int thirdCount = (int) Math.round(initialMaPointsCount * 0.6);
+        final long thirdCount = Math.round(initialMaTimeWindow * 0.6);
         List<Extremum> extremums400 = mapExtremumsToNewMa(marketData, extremums500, thirdCount);
-        final int foursCount = (int) Math.round(initialMaPointsCount * 0.4);
+        final long foursCount = Math.round(initialMaTimeWindow * 0.4);
         List<Extremum> extremums300 = mapExtremumsToNewMa(marketData, extremums400, foursCount);
-        final int fifthCount = (int) Math.round(initialMaPointsCount * 0.25);
+        final long fifthCount = Math.round(initialMaTimeWindow * 0.25);
         List<Extremum> extremums200 = mapExtremumsToNewMa(marketData, extremums300, fifthCount);
-        final int sixthCount = (int) Math.round(initialMaPointsCount * 0.15);
+        final long sixthCount = Math.round(initialMaTimeWindow * 0.15);
         List<Extremum> extremums100 = mapExtremumsToNewMa(marketData, extremums200, sixthCount);
-        System.out.println("After all mappings we have " + extremums100.size() + " extremums");
+        Log.log("after all mappings we have " + extremums100.size() + " extremums");
 
-        List<Extremum> extrema = new ArrayList<>();
+        Set<Extremum> extrema = new HashSet<>();
 
         /*
          * When the latest MA with all extremums is ready, we need to map extremums on real market data (not MA)
@@ -61,59 +85,52 @@ public class ExtremumService {
          */
         extremums100.stream()
                 .filter(Objects::nonNull)
-                .forEach(extremum -> marketData.stream()
-                        .filter(data -> data.getStartTime() == extremum.getTimestamp())
-                        .map(marketData::indexOf)
-                        .findFirst()
-                        .ifPresent(indexOfKey -> {
+                .forEach(extremum -> marketData.entrySet().stream()
+                        .min(Comparator.comparing(entry -> entry.getKey() == extremum.getTimestamp()))
+                        .ifPresent(entry -> {
                             if (extremum.getType() == Extremum.Type.MAX) {
-                                MarketKlineEntry max = marketData.get(Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0));
-                                for (int i = Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0); i < Math.min(indexOfKey + MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, marketData.size() - 1); i++) {
-                                    if (marketData.get(i).getHighPrice() > max.getHighPrice()) {
-                                        max = marketData.get(i);
-                                    }
-                                }
-                                if (!extrema.contains(new Extremum(max.getStartTime(), max.getHighPrice(), Extremum.Type.MAX))) {
-                                    extrema.add(new Extremum(max.getStartTime(), max.getHighPrice(), Extremum.Type.MAX));
-                                }
+                                Map.Entry<Long, Double> max = marketData.entrySet().stream()
+                                        .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
+                                                entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
+                                        .max(Map.Entry.comparingByValue())
+                                        .get();
+
+                                extrema.add(new Extremum(max.getKey(), max.getValue(), Extremum.Type.MAX));
                             }
                             if (extremum.getType() == Extremum.Type.MIN) {
-                                MarketKlineEntry min = marketData.get(Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0));
-                                for (int i = Math.max(indexOfKey - MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, 0); i < Math.min(indexOfKey + MIN_MAX_DETECT_ON_MARKET_DATA_POINTS, marketData.size() - 1); i++) {
-                                    if (marketData.get(i).getLowPrice() < min.getLowPrice()) {
-                                        min = marketData.get(i);
-                                    }
-                                }
-                                if (!extrema.contains(new Extremum(min.getStartTime(), min.getLowPrice(), Extremum.Type.MIN))) {
-                                    extrema.add(new Extremum(min.getStartTime(), min.getLowPrice(), Extremum.Type.MIN));
-                                }
+                                Map.Entry<Long, Double> min = marketData.entrySet().stream()
+                                        .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
+                                                entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
+                                        .min(Map.Entry.comparingByValue())
+                                        .get();
+
+                                extrema.add(new Extremum(min.getKey(), min.getValue(), Extremum.Type.MIN));
                             }
                         }));
 
         /*
          * First we need to make sure that extremums are sorted by time.
          */
-        extrema.sort(Comparator.comparing(Extremum::getTimestamp));
-        System.out.println("After mapping to market data we have " + extremums100.size() + " extremums");
+        List<Extremum> result = extrema.stream().sorted(Comparator.comparing(Extremum::getTimestamp)).toList();
 
-        System.out.println("Start filtering...");
+        Log.log("start filtering...");
         do {
-            removeSeveralOneTypeExtremums(extrema);
-            removeMinHigherThanMax(marketData, extrema);
-            removeExtremumsByPriceThreshold(extrema);
-        } while (extremaAreNotCorrect(extrema));
+            removeSeveralOneTypeExtremums(result);
+            removeMinHigherThanMax(marketData, result);
+            removeExtremumsByPriceThreshold(result);
+        } while (extremaAreNotCorrect(result));
 
-        correctExtremumsIfThereOneIsBetween(marketData, extrema);
-        System.out.println("Found " + extrema.size() + " extremums");
+        correctExtremumsIfThereOneIsBetween(marketData, result);
+        Log.log("found " + extrema.size() + " extremums");
 
-        return extrema;
+        return result;
     }
 
     /**
      * In some cases between MIN and MAX we have MIN (or MAX) which is lower (or higher) than founded one
      * In this case we need to update its price and timestamp to the right ones.
      */
-    private void correctExtremumsIfThereOneIsBetween(List<MarketKlineEntry> marketData, List<Extremum> extrema) {
+    private void correctExtremumsIfThereOneIsBetween(TreeMap<Long, Double> marketData, List<Extremum> extrema) {
 
         for (int i = 1; i < extrema.size(); i++) {
             if (extrema.get(i - 1).getType() == extrema.get(i).getType()) {
@@ -124,30 +141,34 @@ public class ExtremumService {
             final Extremum max = prev.getType() == Extremum.Type.MAX ? prev : curr;
             final Extremum min = prev.getType() == Extremum.Type.MIN ? prev : curr;
 
-            List<MarketKlineEntry> marketDataBetweenMinMax = marketData.stream()
-                    .filter(data -> data.getStartTime() > prev.getTimestamp() && data.getStartTime() < curr.getTimestamp())
-                    .toList();
+            TreeMap<Long, Double> marketDataBetweenMinMax = marketData.entrySet().stream()
+                    .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < curr.getTimestamp())
+                    .collect(Collectors.toMap(Map.Entry::getKey,
+                            Map.Entry::getValue,
+                            (first, second) -> first,
+                            TreeMap::new
+                    ));
 
-            Optional<MarketKlineEntry> lowerThanMin = marketDataBetweenMinMax.stream()
-                    .filter(data -> data.getLowPrice() < min.getPrice())
-                    .max(Comparator.comparing(data -> min.getPrice() - data.getLowPrice()));
+            Optional<Map.Entry<Long, Double>> lowerThanMin = marketDataBetweenMinMax.entrySet().stream()
+                    .filter(data -> data.getValue() < min.getPrice())
+                    .max(Comparator.comparing(data -> min.getPrice() - data.getValue()));
 
-            Optional<MarketKlineEntry> higherThanMax = marketDataBetweenMinMax.stream()
-                    .filter(data -> data.getHighPrice() > max.getPrice())
-                    .max(Comparator.comparing(data -> data.getHighPrice() - max.getPrice()));
+            Optional<Map.Entry<Long, Double>> higherThanMax = marketDataBetweenMinMax.entrySet().stream()
+                    .filter(data -> data.getValue() > max.getPrice())
+                    .max(Comparator.comparing(data -> data.getValue() - max.getPrice()));
 
             if (lowerThanMin.isPresent()) {
-                min.setTimestamp(lowerThanMin.get().getStartTime());
-                min.setPrice(lowerThanMin.get().getLowPrice());
-                System.out.println("MIN corrected");
+                min.setTimestamp(lowerThanMin.get().getKey());
+                min.setPrice(lowerThanMin.get().getValue());
+                Log.log("MIN corrected");
             }
             if (higherThanMax.isPresent()) {
-                max.setTimestamp(higherThanMax.get().getStartTime());
-                max.setPrice(higherThanMax.get().getHighPrice());
-                System.out.println("MAX corrected");
+                max.setTimestamp(higherThanMax.get().getKey());
+                max.setPrice(higherThanMax.get().getValue());
+                Log.log("MAX corrected");
             }
         }
-        System.out.println("Extremums size: " + extrema.size());
+        Log.log("extremums size: " + extrema.size());
     }
 
     /**
@@ -177,17 +198,17 @@ public class ExtremumService {
                     }
                 }
             }
-            System.out.println("Removed " + toRemove.size() + " nearly extremums (price diff < " + minPriceDiff);
+            Log.log("removed " + toRemove.size() + " nearly extremums (price diff < " + minPriceDiff);
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        System.out.println("Extremums size: " + extrema.size());
+        Log.log("extremums size: " + extrema.size());
     }
 
     /**
      * This step we remove maximum < minimum and minimum > maximum pairs
      * Example we convert { MAX (100), MIN (90), MAX (80), MIN (70) } -> { MAX (100), MIN (70) }
      */
-    private void removeMinHigherThanMax(List<MarketKlineEntry> marketData, List<Extremum> extrema) {
+    private void removeMinHigherThanMax(TreeMap<Long, Double> marketData, List<Extremum> extrema) {
         List<Extremum> toRemove;
 
         do {
@@ -198,15 +219,15 @@ public class ExtremumService {
                 final Extremum next = extrema.get(i + 1);
                 if (prev.getType() == Extremum.Type.MAX) {
                     if (curr.getPrice() > prev.getPrice()) {
-                        Optional<MarketKlineEntry> minBetweenPrevNext = marketData.stream()
-                                .filter(data -> data.getStartTime() > prev.getTimestamp() && data.getStartTime() < next.getTimestamp())
-                                .min(Comparator.comparing(MarketKlineEntry::getLowPrice));
+                        Optional<Map.Entry<Long, Double>> minBetweenPrevNext = marketData.entrySet().stream()
+                                .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
+                                .min(Map.Entry.comparingByValue());
 
                         if (minBetweenPrevNext.isPresent() &&
-                                minBetweenPrevNext.get().getLowPrice() < prev.getPrice()) {
-                            curr.setPrice(minBetweenPrevNext.get().getLowPrice());
-                            curr.setTimestamp(minBetweenPrevNext.get().getStartTime());
-                            System.out.println("MIN > MAX corrected");
+                                minBetweenPrevNext.get().getValue() < prev.getPrice()) {
+                            curr.setPrice(minBetweenPrevNext.get().getValue());
+                            curr.setTimestamp(minBetweenPrevNext.get().getKey());
+                            Log.log("MIN > MAX corrected");
                         } else {
                             toRemove.add(prev);
                             toRemove.add(curr);
@@ -214,15 +235,15 @@ public class ExtremumService {
                     }
                 } else {
                     if (curr.getPrice() < prev.getPrice()) {
-                        Optional<MarketKlineEntry> maxBetweenPrevNext = marketData.stream()
-                                .filter(data -> data.getStartTime() > prev.getTimestamp() && data.getStartTime() < next.getTimestamp())
-                                .max(Comparator.comparing(MarketKlineEntry::getLowPrice));
+                        Optional<Map.Entry<Long, Double>> maxBetweenPrevNext = marketData.entrySet().stream()
+                                .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
+                                .max(Map.Entry.comparingByValue());
 
                         if (maxBetweenPrevNext.isPresent() &&
-                                maxBetweenPrevNext.get().getHighPrice() < prev.getPrice()) {
-                            curr.setPrice(maxBetweenPrevNext.get().getHighPrice());
-                            curr.setTimestamp(maxBetweenPrevNext.get().getStartTime());
-                            System.out.println("MAX < MIN corrected");
+                                maxBetweenPrevNext.get().getValue() < prev.getPrice()) {
+                            curr.setPrice(maxBetweenPrevNext.get().getValue());
+                            curr.setTimestamp(maxBetweenPrevNext.get().getKey());
+                            Log.log("MAX < MIN corrected");
                         } else {
                             toRemove.add(prev);
                             toRemove.add(curr);
@@ -230,10 +251,10 @@ public class ExtremumService {
                     }
                 }
             }
-            System.out.println("Removed " + toRemove.size() + " MIN > MAX rows");
+            Log.log("removed " + toRemove.size() + " MIN > MAX rows");
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        System.out.println("Extremums size: " + extrema.size());
+        Log.log("extremums size: " + extrema.size());
     }
 
     /**
@@ -262,97 +283,123 @@ public class ExtremumService {
                     }
                 }
             }
-            System.out.println("Removed " + toRemove.size() + " MAX,MAX... rows");
+            Log.log("removed " + toRemove.size() + " MAX,MAX... rows");
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        System.out.println("Extremums size: " + extrema.size());
+        Log.log("extremums size: " + extrema.size());
     }
 
     @NotNull
-    private List<Extremum> mapExtremumsToNewMa(List<MarketKlineEntry> marketData, List<Extremum> extremumsIn,
-                                               int maPointCount) {
-        Map<Long, Double> average = movingAverage(marketData, maPointCount);
+    private List<Extremum> mapExtremumsToNewMa(TreeMap<Long, Double> marketData, List<Extremum> extremumsIn,
+                                               long maTimeWindow) {
+        TreeMap<Long, Double> average = movingAverage(marketData, maTimeWindow);
         List<Extremum> extremums = findExtremums(average);
 
         return extremumsIn.stream().map(extremumIn -> extremums.stream()
                         .min(Comparator.comparing(extremum ->
                                 Math.abs(extremum.getTimestamp() - extremumIn.getTimestamp())))
                         .orElse(null))
-                .toList();
+                .collect(Collectors.toList());
     }
 
     /**
      * Method calculates moving average (MA) based on market data and average window size
      */
-    private Map<Long, Double> movingAverage(List<MarketKlineEntry> marketData, int pointCount) {
-        if (pointCount <= 0 || pointCount > marketData.size()) {
-            throw new IllegalArgumentException("Invalid pointCount: " + pointCount);
+    private TreeMap<Long, Double> movingAverage(TreeMap<Long, Double> marketData, long timeWindow) {
+        if (timeWindow <= 0) {
+            throw new IllegalArgumentException("Invalid timeWindow: " + timeWindow);
         }
 
-        Map<Long, Double> result = new HashMap<>();
+        TreeMap<Long, Double> result = new TreeMap<>();
         double sum = 0;
 
-        /*
-         * Initialize the first window sum
-         */
-        for (int i = 0; i < pointCount; i++) {
-            sum += (marketData.get(i).getLowPrice() + marketData.get(i).getHighPrice()) / 2.0;
-        }
-        result.put(marketData.get(pointCount - 1).getStartTime(), sum / (double) pointCount);
+        // Get an iterator over the TreeMap's entry set
+        Iterator<Map.Entry<Long, Double>> iterator = marketData.entrySet().iterator();
+        LinkedList<Map.Entry<Long, Double>> window = new LinkedList<>();
 
         /*
-         * Slide the window across the data (to avoid inner redundant foreach loop)
+         * Slide the window across the data
          */
-        for (int i = pointCount; i < marketData.size(); i++) {
-            sum += (marketData.get(i).getLowPrice() + marketData.get(i).getHighPrice()) / 2.0;
-            sum -= (marketData.get(i - pointCount).getLowPrice() + marketData.get(i - pointCount).getHighPrice()) / 2.0;
-            result.put(marketData.get(i).getStartTime(), sum / (double) pointCount);
+        while (iterator.hasNext()) {
+            Map.Entry<Long, Double> currentEntry = iterator.next();
+
+            // Add the new price to the sum
+            window.addLast(currentEntry);
+            sum += currentEntry.getValue();
+
+            // Check the time difference between the first and last elements of the window
+            while (!window.isEmpty() && (window.getLast().getKey() - window.getFirst().getKey() > timeWindow)) {
+                // Remove the oldest price from the sum and the window
+                sum -= window.removeFirst().getValue();
+            }
+
+            // Calculate the moving average for the current window and add it to the result map
+            result.put(currentEntry.getKey(), sum / window.size());
         }
 
         return result;
     }
 
-    public static List<Extremum> findExtremums(Map<Long, Double> maData) {
+    public static List<Extremum> findExtremums(TreeMap<Long, Double> maData) {
         ArrayList<Extremum> extremums = new ArrayList<>();
 
         List<Map.Entry<Long, Double>> entryList = new ArrayList<>(maData.entrySet());
-        entryList.sort(Map.Entry.comparingByKey());
-
         int size = entryList.size();
 
-        for (int i = MIN_MAX_SEARCH_ON_MA_POINTS; i < size - MIN_MAX_SEARCH_ON_MA_POINTS; i++) {
+        for (int i = 0; i < size; i++) {
             double value = entryList.get(i).getValue();
             long key = entryList.get(i).getKey();
             boolean isMaximum = true;
             boolean isMinimum = true;
 
-            for (int j = 1; j <= MIN_MAX_SEARCH_ON_MA_POINTS; j++) {
-                double prevValue = entryList.get(i - j).getValue();
-                double nextValue = entryList.get(i + j).getValue();
-
-                if (value <= prevValue || value <= nextValue) {
+            // Check previous entries within the time window
+            for (int j = i - 1; j >= 0; j--) {
+                long prevKey = entryList.get(j).getKey();
+                double prevValue = entryList.get(j).getValue();
+                if (key - prevKey > MIN_MAX_SEARCH_ON_MA_TIME_WINDOW) {
+                    break;  // Stop checking if the previous entry is outside the time window
+                }
+                if (value <= prevValue) {
                     isMaximum = false;
                 }
-
-                if (value >= prevValue || value >= nextValue) {
+                if (value >= prevValue) {
                     isMinimum = false;
                 }
-
                 if (!isMaximum && !isMinimum) {
                     break;
                 }
             }
 
+            // Check next entries within the time window
+            for (int j = i + 1; j < size; j++) {
+                long nextKey = entryList.get(j).getKey();
+                double nextValue = entryList.get(j).getValue();
+                if (nextKey - key > MIN_MAX_SEARCH_ON_MA_TIME_WINDOW) {
+                    break;  // Stop checking if the next entry is outside the time window
+                }
+                if (value <= nextValue) {
+                    isMaximum = false;
+                }
+                if (value >= nextValue) {
+                    isMinimum = false;
+                }
+                if (!isMaximum && !isMinimum) {
+                    break;
+                }
+            }
+
+            // If the current value is either a maximum or a minimum, add it to the list
             if (isMaximum) {
                 extremums.add(new Extremum(key, value, Extremum.Type.MAX));
             } else if (isMinimum) {
                 extremums.add(new Extremum(key, value, Extremum.Type.MIN));
             }
         }
+
         return extremums;
     }
 
-    private boolean extremaAreNotCorrect( List<Extremum> extrema) {
+    private boolean extremaAreNotCorrect(List<Extremum> extrema) {
         for (int i = 2; i <= extrema.size(); i++) {
             final Extremum prev = extrema.get(i - 2);
             final Extremum curr = extrema.get(i - 1);

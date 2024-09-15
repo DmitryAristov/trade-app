@@ -1,27 +1,19 @@
 package org.bybittradeapp.analysis.service;
 
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
-import org.bybittradeapp.marketData.service.MarketDataService;
-
-import java.util.List;
+import java.util.TreeMap;
 
 public class TrendService {
     public enum Trend { UP, NEUTRAL, DOWN }
 
-    private final List<MarketKlineEntry> marketData;
+    private final TreeMap<Long, Double> marketData;
     private final VolatilityService volatilityService;
 
-    public TrendService(List<MarketKlineEntry> marketData, VolatilityService volatilityService) {
+    public TrendService(TreeMap<Long, Double> marketData, VolatilityService volatilityService) {
         this.marketData = marketData;
         this.volatilityService = volatilityService;
     }
 
     public Trend getTrend(int fromElement) {
-        //TODO
-        return Trend.NEUTRAL;
-    }
-
-    public Trend getTrend(MarketKlineEntry entry) {
         //TODO
         return Trend.NEUTRAL;
     }

@@ -1,55 +1,56 @@
 package org.bybittradeapp.analysis;
 
+import com.bybit.api.client.domain.market.MarketInterval;
 import org.bybittradeapp.analysis.domain.Extremum;
 import org.bybittradeapp.analysis.domain.Imbalance;
+import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.analysis.service.ExtremumService;
 import org.bybittradeapp.analysis.service.ImbalanceService;
 import org.bybittradeapp.analysis.service.TrendService;
 import org.bybittradeapp.analysis.service.VolatilityService;
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
+import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
 import org.bybittradeapp.ui.service.UiDataService;
 import org.bybittradeapp.ui.utils.JsonUtils;
 
+import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.TreeMap;
 
 public class Analyser {
-    private final List<MarketKlineEntry> marketData;
+    private final TreeMap<Long, Double> marketData;
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
     private final TrendService trendService;
     private final ExtremumService extremumService;
     private final UiDataService uiDataService;
 
-    public Analyser(List<MarketKlineEntry> marketData, UiDataService uiDataService) {
+    public Analyser(TreeMap<Long, Double> marketData) {
         this.marketData = marketData;
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService(marketData, volatilityService);
         this.trendService = new TrendService(marketData, volatilityService);
         this.extremumService = new ExtremumService(marketData, volatilityService);
-        this.uiDataService = uiDataService;
+        this.uiDataService = new UiDataService(MarketInterval.FOUR_HOURLY);
+
     }
 
     public void runAnalysis() {
-        System.out.println("Starting analysis of technical instruments");
+        Log.log("starting analysis of technical instruments");
+        List<Imbalance> imbalances = new ArrayList<>();
+        marketData.forEach((key, value) -> {
+            extremumService.onTick(key, value);
 
-        List<Extremum> extrema = extremumService.getExtremums();
-        double progressStep = marketData.size() / 20.;
-        double currentProgress = marketData.size() / 20.;
-        for (int i = 0; i < marketData.size(); i++) {
-            if (i > currentProgress) {
-                System.out.println("check imbalance for " + i + " of " + marketData.size());
-                currentProgress += progressStep;
+            imbalanceService.onTick(key, value);
+            if (imbalanceService.getState() == ImbalanceState.COMPLETED && (imbalances.isEmpty() ||
+                    !imbalances.get(imbalances.size() - 1).equals(imbalanceService.getImbalance()))) {
+                imbalances.add(imbalanceService.getImbalance());
             }
-            imbalanceService.getImbalance(i);
-        }
+        });
+        List<Extremum> extrema = extremumService.getExtremums();
 
-        //TODO
-        // check trend
-
-        List<Imbalance> imbalances = imbalanceService.getImbalances();
         List<MarketKlineEntry> uiMarketData = uiDataService.getMarketData();
-
-        // update UI data
-        JsonUtils.updateAnalysedDataJson(extrema, imbalances, uiMarketData);
+        JsonUtils.updateAnalysedData(extrema, imbalances, new ArrayList<>(), uiMarketData);
     }
 }

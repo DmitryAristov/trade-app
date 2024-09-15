@@ -1,192 +1,181 @@
 package org.bybittradeapp.backtest.service;
 
 import org.bybittradeapp.analysis.domain.Imbalance;
+import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.analysis.service.ExtremumService;
 import org.bybittradeapp.analysis.service.ImbalanceService;
 import org.bybittradeapp.analysis.service.TrendService;
+import org.bybittradeapp.backtest.domain.Account;
+import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
+import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
 
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.TreeMap;
 
 public class Strategy implements Tickle {
+    public enum State {
+        WAIT_IMBALANCE,
+        ENTRY_POINT_SEARCH,
+        POSSIBLE_ENTRY_POINT,
+        POSITION_OPENED,
+        WAIT_POSITION_CLOSED
+    }
+
     /**
      * Стоп лосс цена - в процентах от размера имбаланса
      * Пример:
-     *   тип имбаланса = вверх
-     *   нижняя цена = 10000$
-     *   верхняя цена = 15000$
-     *   тип позиции = SHORT
-     *   TP = 15000 - (15000 - 10000) * 0.3 = 13500$
-     *   SL = 10000 + (15000 - 10000) * 0.1 = 10500$
+     * тип имбаланса = вверх
+     * нижняя цена = 10000$
+     * верхняя цена = 15000$
+     * тип позиции = SHORT
+     * TP = 15000 - (15000 - 10000) * 0.3 = 13500$
+     * SL = 15000 + (15000 - 10000) * 0.1 = 15500$
      */
-    private static final double STOP_LOSS_THRESHOLD = 10.0;
+    private static final double POSSIBLE_STOP_LOSS_THRESHOLD = 0.02;
+    private static final double STOP_LOSS_THRESHOLD = 0.15;
     /**
      * Тейк профит цена - в процентах от размера имбаланса
      */
-    private static final double TAKE_PROFIT_THRESHOLD = 30.0;
-    /**
-     * Сколько времени после окончания имбаланса пытаться открыть позицию. 60 минут = 60 секунд = 3600000 мс.
-     */
-    private static final long AFTER_IMBALANCE_COMPLETE_TIME_TO_OPEN_POSITION = 4200000L;
-    /**
-     * Время жизни лимитного ордера. После экспирации ордер будет отменен. 10 минут = 600 секунд = 600000 мс.
-     */
-    private static final long MAX_LIMIT_ORDER_LIVE_TIME = 600000L;
-    private static final long MAX_POSITION_LIVE_TIME = 15 * 24 * 60 * 60 * 1000;
+    private static final double TAKE_PROFIT_THRESHOLD = 0.6;
+    private static final long POSITION_LIVE_TIME = 10L * 24L * 60L * 60L * 1000L; // 10 days
 
     private final ExchangeSimulator simulator;
-    private final List<MarketKlineEntry> marketData;
+    private final TreeMap<Long, Double> marketData;
     private final ImbalanceService imbalanceService;
     private final ExtremumService extremumService;
     private final TrendService trendService;
+    private final Account account;
+    public State state = State.WAIT_IMBALANCE;
 
     public Strategy(ExchangeSimulator simulator,
-                    List<MarketKlineEntry> marketData,
+                    TreeMap<Long, Double> marketData,
                     ImbalanceService imbalanceService,
                     ExtremumService extremumService,
-                    TrendService trendService) {
+                    TrendService trendService,
+                    Account account) {
         this.simulator = simulator;
         this.marketData = marketData;
         this.imbalanceService = imbalanceService;
         this.extremumService = extremumService;
         this.trendService = trendService;
+        this.account = account;
     }
 
     @Override
-    public void onTick(MarketKlineEntry currentEntry) {
+    public void onTick(long time, double price) {
+        //TODO
+        // Перед открытием позиции нужно проверить зоны поддержки и сопротивления.
+        // Обычно имбаланс заканчивается на этих зонах (например поддержки) и потом доходит обратно
+        // к ближайщей или следующей противоположной (сопротивления) зоне
+        // var extremums = extremumService.getExtremums();
 
-        List<Order> openLimitOrders = simulator.getLimitOrders();
-        if (!openLimitOrders.isEmpty()) {
-            /*
-             * Обрабатываем неисполненные лимитные ордера
-             */
-            openLimitOrders.stream()
-                    .filter(order -> currentEntry.getStartTime() - order.getCreateTime() > MAX_LIMIT_ORDER_LIVE_TIME)
-                    .forEach(Order::cancel);
-            return;
-        }
+        switch (state) {
+            case WAIT_IMBALANCE -> {
+                /*
+                 * Is imbalance present?
+                 *    yes - change state to ENTRY_POINT_SEARCH
+                 *    no - { return without state change }
+                 */
+                if (imbalanceService.getState() == ImbalanceState.PROGRESS) {
+                    state = State.ENTRY_POINT_SEARCH;
+                }
+            }
+            case ENTRY_POINT_SEARCH -> {
+                /*
+                 * Is imbalance completed?
+                 *    yes - change state to POSSIBLE_ENTRY_POINT
+                 *    no - { return without state change }
+                 */
+                if (imbalanceService.getState() == ImbalanceState.POSSIBLE_COMPLETED) {
+                    state = State.POSSIBLE_ENTRY_POINT;
+                }
+            }
+            case POSSIBLE_ENTRY_POINT -> {
+                /*
+                 * Open position with stop loss near to open price.
+                 * After some time position is closed automatically (or manually)?
+                 *    yes - { return without state change }
+                 *    no - change state to POSITION_OPENED
+                 */
+                Imbalance imbalance = imbalanceService.getImbalance();
 
-        List<Position> openPositions = simulator.getOpenPositions();
-        if (!openPositions.isEmpty()) {
-            /*
-             * Обрабатываем открытые позиции
-             */
+                Order marketOrder = new Order();
+                marketOrder.setExecutionType(ExecutionType.MARKET);
 
-            openPositions.forEach(position -> {
-                correctTP_SL(position, currentEntry);
-                closeByTimeout(position, currentEntry);
-            });
-            return;
-        }
+                double tp, sl;
+                double imbalanceSize = imbalance.getMax() - imbalance.getMin();
+                if (imbalance.getType() == Imbalance.Type.UP) {
+                    marketOrder.setType(OrderType.SHORT);
+                    tp = price - TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                    sl = price + POSSIBLE_STOP_LOSS_THRESHOLD * imbalanceSize;
+                } else {
+                    marketOrder.setType(OrderType.LONG);
+                    tp = price + TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                    sl = price - POSSIBLE_STOP_LOSS_THRESHOLD * imbalanceSize;
+                }
+                marketOrder.setPrice(price);
+                marketOrder.setTP_SL(tp, sl);
+                marketOrder.setCreateTime(time);
 
-        var imbalance_ = imbalanceService.getImbalance(currentEntry);
-        if (imbalance_.isEmpty()) {
-            /*
-             * Нет имбаланса - пропускаем тик
-             */
-            return;
-        }
-
-        Imbalance imbalance = imbalance_.get();
-        if (imbalance.getStatus() == Imbalance.Status.PROGRESS) {
-            /*
-             * Имбаланс еще не закончился - пропускаем тик
-             */
-            return;
-        }
-
-        long imbalanceCompleteTime = switch (imbalance.getType()) {
-            case UP -> imbalance.getMax().getStartTime();
-            case DOWN -> imbalance.getMin().getStartTime();
-        };
-
-        /*
-         * Если текущее время минус время окончания имбаланса меньше чем 60 минут -> можно открывать позицию в обратную сторону
-         */
-        if (currentEntry.getStartTime() - imbalanceCompleteTime < AFTER_IMBALANCE_COMPLETE_TIME_TO_OPEN_POSITION) {
-            //TODO
-            // Перед открытием позиции нужно проверить зоны поддержки и сопротивления.
-            // Обычно имбаланс заканчивается на этих зонах (например поддержки) и потом доходит обратно
-            // к ближайщей или следующей противоположной (сопротивления) зоне
-//            var extremums = extremumService.getExtremums();
-
-            switch (imbalance.getType()) {
-
-                // Если имбаланс был вверх -> открываем Short (на понижение цены)
-                case UP -> {
-                    Order marketOrder = new Order(Order.OrderType.SHORT, Order.ExecutionType.MARKET);
-                    marketOrder.setPrice(currentEntry.getPrice());
-
-                    double tp = currentEntry.getPrice()
-                            - TAKE_PROFIT_THRESHOLD * (imbalance.getMax().getHighPrice() - imbalance.getMin().getLowPrice()) / 100;
-                    double sl = imbalance.getMax().getHighPrice()
-                            + STOP_LOSS_THRESHOLD * (imbalance.getMax().getHighPrice() - imbalance.getMin().getLowPrice()) / 100;
-
-                    // Если текущая цена рыночного ордера больше чем расчетный стоп лосс то не открывать позицию
-                    // (для SHORT позиции стоп находится выше чем цена открытия)
-                    if (sl <= 0 || sl < currentEntry.getPrice()) {
-                        return;
+                simulator.submitOrder(marketOrder, time);
+                state = State.POSITION_OPENED;
+            }
+            case POSITION_OPENED -> {
+                /*
+                 * Wait for the price moving to stop loss or take profit.
+                 * Control opened position.
+                 * Position is closed?
+                 *    yes - change state to IMBALANCE_SEARCH
+                 *    no - { return without state change }
+                 */
+                if (imbalanceService.getState() == ImbalanceState.PROGRESS) {
+                    List<Position> positions = simulator.getOpenPositions();
+                    if (!positions.isEmpty()) {
+                        positions.forEach(position -> ExchangeSimulator.closePosition(position, account, time, price));
                     }
-                    // Если текущая цена рыночного ордера меньше чем расчетный тейк профит то не открывать позицию
-                    // (для SHORT позиции тейк находится ниже чем цена открытия)
-                    if (tp <= 0 || tp > currentEntry.getPrice()) {
-                        return;
-                    }
-                    marketOrder.setTP_SL(tp, sl);
-                    marketOrder.setCreateTime(currentEntry.getStartTime());
-                    System.out.println("Imbalance for order: " + imbalance);
-                    simulator.submitOrder(marketOrder);
+                    List<Order> limitOrders = simulator.getLimitOrders();
+                    limitOrders.forEach(Order::cancel);
                 }
 
-                // Если имбаланс был вниз -> открываем Long (на повышение цены)
-                case DOWN -> {
-                    Order marketOrder = new Order(Order.OrderType.LONG, Order.ExecutionType.MARKET);
-                    marketOrder.setPrice(currentEntry.getPrice());
-
-                    //TODO открывать позицию рядом с окончанием имбаланса. Уменьшить время подтверждения имбаланса (?)
-                    double tp = currentEntry.getPrice()
-                            + TAKE_PROFIT_THRESHOLD * (imbalance.getMax().getHighPrice() - imbalance.getMin().getLowPrice()) / 100;
-                    double sl = imbalance.getMin().getLowPrice()
-                            - STOP_LOSS_THRESHOLD * (imbalance.getMax().getHighPrice() - imbalance.getMin().getLowPrice()) / 100;
-
-                    // Если текущая цена рыночного ордера меньше чем расчетный стоп лосс то не открывать позицию
-                    // (для LONG позиции стоп находится ниже чем цена открытия)
-                    if (sl <= 0 || sl > currentEntry.getPrice()) {
-                        return;
+                if (imbalanceService.getState() == ImbalanceState.COMPLETED) {
+                    List<Position> positions = simulator.getOpenPositions();
+                    if (positions.isEmpty()) {
+                        state = State.WAIT_IMBALANCE;
+                    } else {
+                        positions.forEach(position -> correctTP_SL(position, price));
+                        state = State.WAIT_POSITION_CLOSED;
                     }
-                    // Если текущая цена рыночного ордера больше чем расчетный тейк профит то не открывать позицию
-                    // (для LONG позиции тейк находится выше чем цена открытия)
-                    if (tp <= 0 || tp < currentEntry.getPrice()) {
-                        return;
-                    }
-                    marketOrder.setTP_SL(tp, sl);
-                    marketOrder.setCreateTime(currentEntry.getStartTime());
-                    System.out.println("Imbalance for order: " + imbalance);
-                    simulator.submitOrder(marketOrder);
                 }
+            }
+            case WAIT_POSITION_CLOSED -> {
+                List<Position> positions = simulator.getOpenPositions();
+                if (positions.isEmpty()) {
+                    state = State.WAIT_IMBALANCE;
+                }
+                positions.forEach(position -> closeByTimeout(time, price, position));
             }
         }
     }
 
-    /**
-     * Корректируем тейк профит и стоп лосс открытой позиции в зависимости от текущего курса валюты.
-     */
-    private void correctTP_SL(Position position, MarketKlineEntry entry) {
-        //TODO
-        var lastNEntries = marketData.stream().collect(Collectors.toList());
-
+    private void correctTP_SL(Position position, double price) {
+        Imbalance imbalance = imbalanceService.getImbalance();
+        double imbalanceSize = imbalance.getMax() - imbalance.getMin();
+        double sl = switch (position.getOrder().getType()) {
+            case SHORT -> price + STOP_LOSS_THRESHOLD * imbalanceSize;
+            case LONG -> price - STOP_LOSS_THRESHOLD * imbalanceSize;
+        };
+        position.setStopLoss(sl);
     }
 
-    /**
-     * Если позиция слишком долго не закрывается, закрыть принудительно
-     */
-    private void closeByTimeout(Position position, MarketKlineEntry entry) {
-        if (entry.getStartTime() - position.getOrder().getCreateTime() > MAX_POSITION_LIVE_TIME) {
-            System.out.println("Position " + position.toString() + " is closed by timeout with TP&SL: " + position.getProfitLoss());
-            position.close(entry.getPrice());
+    private void closeByTimeout(long time, double price, Position position) {
+        if (time - position.getOrder().getCreateTime() > POSITION_LIVE_TIME) {
+            ExchangeSimulator.closePosition(position, account, time, price);
         }
+    }
+
+    public State getState() {
+        return state;
     }
 }

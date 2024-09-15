@@ -1,41 +1,59 @@
 package org.bybittradeapp.analysis.domain;
 
-import org.bybittradeapp.marketData.domain.MarketKlineEntry;
 import org.jetbrains.annotations.NotNull;
 
-import java.time.Instant;
-import java.util.Objects;
+import java.io.Serializable;
+import java.util.Map;
 
-public class Imbalance {
+public class Imbalance implements Serializable {
     public enum Type { UP, DOWN }
-    public enum Status { PROGRESS, COMPLETE }
-    @NotNull
-    private MarketKlineEntry min;
-    @NotNull
-    private MarketKlineEntry max;
-    private Type type;
-    private Status status;
 
-    public Imbalance(@NotNull MarketKlineEntry min, @NotNull MarketKlineEntry max) {
-        this.min = min;
-        this.max = max;
+    private final long start;
+    private final Type type;
+    private double min;
+    private long end;
+    private double max;
+    private long completeTime;
+
+    public Imbalance(@NotNull Map.Entry<Long, Double> min, @NotNull Map.Entry<Long, Double> max) {
+        this.min = min.getValue();
+        this.max = max.getValue();
+        if (min.getKey() < max.getKey()) {
+            this.start = min.getKey();
+            this.end = max.getKey();
+            this.type = Type.UP;
+        } else {
+            this.start = max.getKey();
+            this.end = min.getKey();
+            this.type = Type.DOWN;
+        }
     }
 
-    @NotNull
-    public MarketKlineEntry getMin() {
+    public double getMin() {
         return min;
     }
 
-    public void setMin(@NotNull MarketKlineEntry min) {
+    public void setMin(double min) {
         this.min = min;
     }
 
-    @NotNull
-    public MarketKlineEntry getMax() {
+    public long getStart() {
+        return start;
+    }
+
+    public long getEnd() {
+        return end;
+    }
+
+    public void setEnd(long end) {
+        this.end = end;
+    }
+
+    public double getMax() {
         return max;
     }
 
-    public void setMax(@NotNull MarketKlineEntry max) {
+    public void setMax(double max) {
         this.max = max;
     }
 
@@ -43,39 +61,7 @@ public class Imbalance {
         return type;
     }
 
-    public void setType(Type type) {
-        this.type = type;
-    }
-
-    public Status getStatus() {
-        return status;
-    }
-
-    public void setStatus(Status status) {
-        this.status = status;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        Imbalance imbalance = (Imbalance) o;
-        return min.getLowPrice() == imbalance.min.getLowPrice()
-                && max.getHighPrice() == imbalance.max.getHighPrice()
-                && type == imbalance.type
-                && status == imbalance.status;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(min.getLowPrice(), max.getHighPrice(), type, status);
-    }
-
-    @Override
-    public String toString() {
-        return type +
-                " {min=" + min.getLowPrice() + " at=" + Instant.ofEpochMilli(min.getStartTime()) +
-                ", max=" + max.getHighPrice() + " at=" + Instant.ofEpochMilli(max.getStartTime()) +
-                '}';
+    public void setCompleteTime(long completeTime) {
+        this.completeTime = completeTime;
     }
 }

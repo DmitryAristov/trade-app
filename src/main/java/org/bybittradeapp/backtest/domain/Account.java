@@ -1,14 +1,18 @@
 package org.bybittradeapp.backtest.domain;
 
 public class Account {
+    private static final int BALANCE = 100000;
+    private static final double RISK_LEVEL = 50.0;
+    private static final int CREDIT_LEVEL = 3;
+
     private double balance;
     private final double riskPercentage;
     private final long credit;
 
-    public Account(double initialBalance, double riskPercentage, long credit) {
-        this.balance = initialBalance;
-        this.riskPercentage = riskPercentage;
-        this.credit = credit;
+    public Account() {
+        this.balance = BALANCE;
+        this.riskPercentage = RISK_LEVEL;
+        this.credit = CREDIT_LEVEL;
     }
 
     public double getBalance() {
@@ -23,7 +27,6 @@ public class Account {
     }
 
     public void updateBalance(double profitLoss) {
-        System.out.println("Balance changed: " + balance + " " + profitLoss + " = " + (balance + profitLoss));
         this.balance += profitLoss * credit;
     }
 }

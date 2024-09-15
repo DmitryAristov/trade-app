@@ -1,8 +1,9 @@
 package org.bybittradeapp.analysis.domain;
 
+import java.io.Serializable;
 import java.util.Objects;
 
-public class Extremum {
+public class Extremum implements Serializable {
     public enum Type {
         MIN,
         MAX;
@@ -17,10 +18,10 @@ public class Extremum {
 
     private long timestamp;
     private double price;
-    private Type type;
+    private final Type type;
 
-    public Extremum(long timestamp, double price, Type type) {
-        this.timestamp = timestamp;
+    public Extremum(long time, double price, Type type) {
+        this.timestamp = time;
         this.price = price;
         this.type = type;
     }
@@ -43,10 +44,6 @@ public class Extremum {
 
     public Type getType() {
         return type;
-    }
-
-    public void setType(Type type) {
-        this.type = type;
     }
 
     @Override

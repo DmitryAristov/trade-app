@@ -1,11 +1,15 @@
 package org.bybittradeapp.backtest.domain;
 
-public class Position {
+import java.io.Serializable;
+
+public class Position implements Serializable {
     private final Order order;
     private final double openPrice;
     private final double takeProfit;
-    private final double stopLoss;
+    private double stopLoss;
     private double closePrice;
+    private final long createTime;
+    private long closeTime;
 
     /**
      * position size (in BTC)
@@ -13,10 +17,11 @@ public class Position {
     private final double amount;
     private boolean isOpen = true;
 
-    public Position(Order order, double openPrice, double amountOfMoney) {
+    public Position(Order order, double price, long time, double amountOfMoney) {
         this.order = order;
-        this.openPrice = openPrice;
-        this.amount = amountOfMoney / openPrice;
+        this.openPrice = price;
+        this.createTime = time;
+        this.amount = amountOfMoney / price;
         this.takeProfit = order.getTakeProfit();
         this.stopLoss = order.getStopLoss();
     }
@@ -24,8 +29,9 @@ public class Position {
     /**
      * Закрыть позицию
      */
-    public void close(double closePrice) {
-        this.closePrice = closePrice;
+    public void close(long time, double price) {
+        this.closePrice = price;
+        this.closeTime = time;
         this.isOpen = false;
     }
 
@@ -51,18 +57,28 @@ public class Position {
         return stopLoss;
     }
 
+    public void setStopLoss(double stopLoss) {
+        this.stopLoss = stopLoss;
+    }
+
     public Order getOrder() {
         return order;
     }
 
-    @Override
-    public String toString() {
-        return "Position{" +
-                "openPrice=" + openPrice +
-                ", amount=" + amount +
-                ", takeProfit=" + takeProfit +
-                ", stopLoss=" + stopLoss +
-                '}';
+    public long getCloseTime() {
+        return closeTime;
+    }
+
+    public long getCreateTime() {
+        return createTime;
+    }
+
+    public double getOpenPrice() {
+        return openPrice;
+    }
+
+    public double getClosePrice() {
+        return closePrice;
     }
 }
 
