@@ -38,6 +38,7 @@ public class ExtremumService implements Tickle {
 
     @Override
     public void onTick(long time, double price) {
+        //TODO
 //        updateData(time, price);
     }
 

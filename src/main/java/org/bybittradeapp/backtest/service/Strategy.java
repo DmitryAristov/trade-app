@@ -78,7 +78,7 @@ public class Strategy implements Tickle {
                  *    yes - change state to ENTRY_POINT_SEARCH
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getState() == ImbalanceState.PROGRESS) {
+                if (imbalanceService.getState() == ImbalanceState.IMBALANCE_IN_PROGRESS) {
                     state = State.ENTRY_POINT_SEARCH;
                 }
             }
@@ -88,7 +88,7 @@ public class Strategy implements Tickle {
                  *    yes - change state to POSSIBLE_ENTRY_POINT
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getState() == ImbalanceState.POSSIBLE_COMPLETED) {
+                if (imbalanceService.getState() == ImbalanceState.POTENTIAL_END_POINT_FOUND) {
                     state = State.POSSIBLE_ENTRY_POINT;
                 }
             }
@@ -105,7 +105,7 @@ public class Strategy implements Tickle {
                 marketOrder.setExecutionType(ExecutionType.MARKET);
 
                 double tp, sl;
-                double imbalanceSize = imbalance.getMax() - imbalance.getMin();
+                double imbalanceSize = Math.abs(imbalance.getStartPrice() - imbalance.getEndPrice());
                 if (imbalance.getType() == Imbalance.Type.UP) {
                     marketOrder.setType(OrderType.SHORT);
                     tp = price - TAKE_PROFIT_THRESHOLD * imbalanceSize;
@@ -130,7 +130,7 @@ public class Strategy implements Tickle {
                  *    yes - change state to IMBALANCE_SEARCH
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getState() == ImbalanceState.PROGRESS) {
+                if (imbalanceService.getState() == ImbalanceState.IMBALANCE_IN_PROGRESS) {
                     List<Position> positions = simulator.getOpenPositions();
                     if (!positions.isEmpty()) {
                         positions.forEach(position -> ExchangeSimulator.closePosition(position, account, time, price));
@@ -139,7 +139,7 @@ public class Strategy implements Tickle {
                     limitOrders.forEach(Order::cancel);
                 }
 
-                if (imbalanceService.getState() == ImbalanceState.COMPLETED) {
+                if (imbalanceService.getState() == ImbalanceState.IMBALANCE_COMPLETED) {
                     List<Position> positions = simulator.getOpenPositions();
                     if (positions.isEmpty()) {
                         state = State.WAIT_IMBALANCE;
@@ -161,7 +161,7 @@ public class Strategy implements Tickle {
 
     private void correctTP_SL(Position position, double price) {
         Imbalance imbalance = imbalanceService.getImbalance();
-        double imbalanceSize = imbalance.getMax() - imbalance.getMin();
+        double imbalanceSize = Math.abs(imbalance.getStartPrice() - imbalance.getEndPrice());
         double sl = switch (position.getOrder().getType()) {
             case SHORT -> price + STOP_LOSS_THRESHOLD * imbalanceSize;
             case LONG -> price - STOP_LOSS_THRESHOLD * imbalanceSize;

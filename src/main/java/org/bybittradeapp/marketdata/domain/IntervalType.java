@@ -12,4 +12,9 @@ public enum IntervalType {
     public long getMills() {
         return mills;
     }
+
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase();
+    }
 }

@@ -17,6 +17,10 @@ public class Log {
         StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
         String fullClassName = stackTrace[2].getClassName();
         String methodName = stackTrace[2].getMethodName();
+        if (fullClassName.equals(Log.class.getName())) {
+            fullClassName = stackTrace[3].getClassName();
+            methodName = stackTrace[3].getMethodName();
+        }
 
         String simpleClassName = fullClassName.substring(fullClassName.lastIndexOf('.') + 1);
 

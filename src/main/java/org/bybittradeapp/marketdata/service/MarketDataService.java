@@ -9,35 +9,28 @@ import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.apache.commons.lang3.StringUtils;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.IntervalType;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.bybittradeapp.Main.HISTORICAL_DATA_SIZE;
-import static org.bybittradeapp.Main.SYMBOL;
-import static org.bybittradeapp.Main.mapper;
+import static org.bybittradeapp.Main.*;
 import static org.bybittradeapp.logging.Log.logProgress;
 
 public class MarketDataService {
 
     private static final long START_TIME = Instant.now().minus(HISTORICAL_DATA_SIZE, ChronoUnit.DAYS).toEpochMilli();
     private static final int MAX_ROWS_LIMIT = 1000;
-    public static final String PATH_RESOURCES = "C:\\Users\\dimas\\IdeaProjects\\bybit-trade-app\\src\\main\\resources";
+    public static final String PATH_RESOURCES = "/home/dmitriy/Projects/bybit-trade-app/src/main/resources";
 
     private final IntervalType intervalType;
     private final TreeMap<Long, Double> marketData;
@@ -49,10 +42,17 @@ public class MarketDataService {
     public MarketDataService() {
         this.intervalType = IntervalType.SECOND;
         this.marketData = _deserialize();
-        this.fullSize = (Instant.now().toEpochMilli() - marketData.firstKey()) / 1000L;
+
+        if (marketData.isEmpty()) {
+            this.fullSize = (Instant.now().toEpochMilli() - START_TIME) / 1000L;
+        } else {
+            this.fullSize = (Instant.now().toEpochMilli() - marketData.firstKey()) / 1000L;
+        }
         this.progress = ((double) marketData.size()) / ((double) fullSize);
         this.startTime = Instant.now().toEpochMilli();
         this.step = new AtomicLong(0L);
+
+        if (SKIP_MARKET_DATA_UPDATE && !marketData.isEmpty()) return;
 
         Long latestSavedElement = null;
         if (!marketData.isEmpty()) {
@@ -106,30 +106,26 @@ public class MarketDataService {
     }
 
     private void _serialize(TreeMap<Long, Double> marketMap) {
-        try {
-            try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "\\market_data" + intervalType);
-                 ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
-            ) {
-                Log.log("serializing...");
-                objectOutputStream.writeObject(marketMap);
-                Log.log("marketData [" + marketMap.size() + "] serialized");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+        try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "/market_data_" + intervalType.toString());
+             ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
+        ) {
+            Log.log("serializing...");
+            objectOutputStream.writeObject(marketMap);
+            Log.log("marketData [" + marketMap.size() + "] serialized");
+        } catch (IOException ignored) {
         }
     }
 
     @SuppressWarnings("unchecked")
     private TreeMap<Long, Double> _deserialize() {
-        try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "\\market_data" + intervalType);
+        try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "/market_data_" + intervalType.toString());
              ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)
         ) {
             Log.log("deserializing...");
             TreeMap<Long, Double> result = (TreeMap<Long, Double>) objectInputStream.readObject();
             Log.log("marketData [" + result.size() + "] deserialized");
             return result;
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
+        } catch (ClassNotFoundException | IOException e) {
             return new TreeMap<>();
         }
     }
@@ -168,7 +164,7 @@ public class MarketDataService {
             }
             return priceMap;
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
         return null;
     }

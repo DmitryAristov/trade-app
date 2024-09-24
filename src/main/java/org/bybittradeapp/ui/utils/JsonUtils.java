@@ -30,7 +30,7 @@ import static org.bybittradeapp.marketdata.service.MarketDataService.PATH_RESOUR
  * Temporary utility class for UI purposes
  */
 public class JsonUtils {
-    public static final String TRADING_VUE_PATH = "C:\\Users\\dimas\\IdeaProjects\\trading-vue-js";
+    public static final String TRADING_VUE_PATH = "/home/dmitriy/Projects/trading-vue-js";
     public static final long ZONE_DELAY = 10800000L;
 
     public static void updateMarketData(List<MarketKlineEntry> uiMarketData) {
@@ -49,7 +49,7 @@ public class JsonUtils {
         });
 
         try {
-            File file = new File(TRADING_VUE_PATH + "\\data\\data.json");
+            File file = new File(TRADING_VUE_PATH + "/data/data.json");
             JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("ohlcv")) {
@@ -94,7 +94,7 @@ public class JsonUtils {
         }
 
         try {
-            File file = new File(TRADING_VUE_PATH + "\\data\\data.json");
+            File file = new File(TRADING_VUE_PATH + "/data/data.json");
             JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("onchart")) {
@@ -116,12 +116,12 @@ public class JsonUtils {
         for (Imbalance imbalance : imbalances) {
             Optional<Long> timeLeft = uiMarketData.stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime < imbalance.getStart() + ZONE_DELAY)
+                    .filter(startTime -> startTime < imbalance.getStartTime() + ZONE_DELAY)
                     .max(Comparator.comparing(Long::longValue));
 
             Optional<Long> timeRight = uiMarketData.stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime > imbalance.getEnd() + ZONE_DELAY)
+                    .filter(startTime -> startTime > imbalance.getEndTime() + ZONE_DELAY)
                     .min(Comparator.comparing(Long::longValue));
             if (timeRight.isEmpty() || timeLeft.isEmpty()) {
                 return;
@@ -131,11 +131,11 @@ public class JsonUtils {
 
             ArrayNode p1NodeUp = mapper.createArrayNode();
             p1NodeUp.add(timeLeft.get());
-            p1NodeUp.add(imbalance.getMax());
+            p1NodeUp.add(imbalance.getStartPrice());
 
             ArrayNode p2NodeUp = mapper.createArrayNode();
             p2NodeUp.add(timeRight.get());
-            p2NodeUp.add(imbalance.getMax());
+            p2NodeUp.add(imbalance.getStartPrice());
 
             Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 15, color);
             Segment segmentUp = new Segment("imb", "Segment", mapper.createArrayNode(), settingsUp);
@@ -145,11 +145,11 @@ public class JsonUtils {
 
             ArrayNode p1NodeDown = mapper.createArrayNode();
             p1NodeDown.add(timeLeft.get());
-            p1NodeDown.add(imbalance.getMin());
+            p1NodeDown.add(imbalance.getEndPrice());
 
             ArrayNode p2NodeDown = mapper.createArrayNode();
             p2NodeDown.add(timeRight.get());
-            p2NodeDown.add(imbalance.getMin());
+            p2NodeDown.add(imbalance.getEndPrice());
 
             Settings settingsDown = new Settings(p1NodeDown, p2NodeDown, 15, color);
             Segment segmentDown = new Segment("imb", "Segment", mapper.createArrayNode(), settingsDown);
@@ -258,7 +258,7 @@ public class JsonUtils {
 
     private static <T> void serialize(List<T> object, String fileName) {
         try {
-            try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "\\" + fileName);
+            try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "/" + fileName);
                  ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
             ) {
                 Log.log("serializing " + fileName);
@@ -272,7 +272,7 @@ public class JsonUtils {
 
     @SuppressWarnings("unchecked")
     private static <T> List<T> deserialize(String fileName) {
-        try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "\\" + fileName);
+        try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "/" + fileName);
              ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)
         ) {
             Log.log("deserializing " + fileName);

@@ -4,199 +4,151 @@ import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.backtest.service.Tickle;
 
-import java.util.AbstractMap;
-import java.util.Map;
+import java.util.NavigableMap;
 import java.util.TreeMap;
-import java.util.concurrent.atomic.AtomicLong;
-
 
 public class ImbalanceService implements Tickle {
+
     /**
      * Часть от дневной волатильности которая уже считается имбалансом.
      * Например, волатильность = 5%, средняя цена = 50000$, IMBALANCE_SIZE = 1, тогда 0.05 * 50000 * 1 = 2500 - считаем что изменение >= 2500 это имбаланс.
      * Если IMBALANCE_SIZE = 0.5, то 2500 * 0.5 = 1250 - изменение >= 2500 это имбаланс.
      */
-    public static final double IMBALANCE_SIZE = 0.5;
-    /**
-     * Окно данных в которых происходит поиск
-     */
-    public static final long SEARCH_TIME_WINDOW = 6L * 60L * 60L * 1000L; // 6 hours
-    /**
-     * Если в течение этого времени минимуму/максимум не обновился - считаем имбаланс завершенным
-     */
-    public static final long POSSIBLE_COMPLETE_TIME_WINDOW = 1L * 60L * 1000L;    // 1 minute
-    public static final long COMPLETE_TIME_WINDOW = 10L * 60L * 1000L;    // 10 minutes
-    /**
-     * Минимальная скорость изменения необходимая для того чтобы считать данное изменение имбалансом.
-     * Долларов в миллисекунду
-     */
-    public final double speed;
-    /**
-     * Минимальная разница цен изменения которую можно считать имбалансом.
-     */
-    public final double priceThreshold;
+    private final double PRICE_CHANGE_THRESHOLD;
+    private final double SPEED_THRESHOLD_PER_MILLISECOND;
+    private static final long POSSIBLE_END_TIME = 60 * 1000L;
+    private static final long EXACT_END_TIME = 180 * 1000L;
+    private static final long COMPLETE_TIME = 600 * 1000L;
+    private static final long COMBINE_TIME_FACTOR = 2;
 
+    private final TreeMap<Long, Double> data = new TreeMap<>();
+    private Imbalance currentImbalance = null;
+    private Imbalance lastImbalance = null;
+    private ImbalanceState currentState = ImbalanceState.SEARCHING_FOR_IMBALANCE;
 
-    private final TreeMap<Long, Double> marketData;
-    private TreeMap<Long, Double> data = null;
-    private Imbalance imbalance = null;
-    private Map.Entry<Long, Double> max, min;
-    private ImbalanceState state = ImbalanceState.SEARCH_IMBALANCE;
-
-    AtomicLong step = new AtomicLong(0L);
-
-    public ImbalanceService(TreeMap<Long, Double> marketData, VolatilityService volatilityService) {
-        this.marketData = marketData;
-        this.priceThreshold = volatilityService.getVolatility() * volatilityService.getAverage() * IMBALANCE_SIZE;
-        this.speed = this.priceThreshold / (120L * 60L * 1000L * IMBALANCE_SIZE);
+    public ImbalanceService(VolatilityService volatilityService) {
+        this.PRICE_CHANGE_THRESHOLD = volatilityService.getVolatility() * volatilityService.getAverage() * 0.3;
+        this.SPEED_THRESHOLD_PER_MILLISECOND = volatilityService.getVolatility() * volatilityService.getAverage() / (1.5 * 60 * 60L * 1000L);
     }
 
     @Override
     public void onTick(long time, double price) {
         updateData(time, price);
-
-        if (data.isEmpty()) {
-            return;
+        switch (currentState) {
+            case SEARCHING_FOR_IMBALANCE -> detectImbalanceStart(time, price);
+            case IMBALANCE_IN_PROGRESS -> trackImbalanceProgress(time, price);
+            case SEARCHING_POTENTIAL_END_POINT -> searchingPossibleEndPoint(time, price);
+            case POTENTIAL_END_POINT_FOUND -> evaluatePossibleEndPointFound(time, price);
+            case IMBALANCE_COMPLETED -> resetImbalanceState();
         }
+    }
 
-        if (time == 1723473690000L) {
-            System.out.print("");
-        }
-        switch (state) {
-            case SEARCH_IMBALANCE -> {
-                /* Look for imbalance. Found?
-                 *    yes - change state to PROGRESS, save imbalance to local variable, return
-                 *    no - { return without state change }
-                 */
-                double priceDiff = max.getValue() - min.getValue();
-                double timeDiff = Math.abs(max.getKey() - min.getKey());
+    private void detectImbalanceStart(long currentTime, double currentPrice) {
 
-                if (priceDiff > priceThreshold && priceDiff / timeDiff > speed) {
-                    imbalance = new Imbalance(min, max);
-                    state = ImbalanceState.PROGRESS;
-                }
+        NavigableMap<Long, Double> descendingData = data.descendingMap();
+        Long initialTime = null;
+        Double initialPrice = null;
+
+        for (long previousTime : descendingData.keySet()) {
+            double previousPrice = descendingData.get(previousTime);
+
+            if (previousTime == currentTime) {
+                // Пропускаем текущий элемент, так как он является точкой отсчета
+                continue;
             }
-            case PROGRESS -> {
-                /* Imbalance completed?
-                 *    yes - change state to POSSIBLE_COMPLETED, return
-                 *    no - { return without state change }
-                 */
-                if (imbalance.getType() == Imbalance.Type.UP) {
-                    // If min/max is changed - update it
-                    if (price > imbalance.getMax()) {
-                        imbalance.setMax(price);
-                        imbalance.setEnd(time);
-                    }
-                } else {
-                    if (price < imbalance.getMin()) {
-                        imbalance.setMin(price);
-                        imbalance.setEnd(time);
-                    }
-                }
-                /*
-                 * Чем больше имбаланс, тем дольше нужно ждать для его подтверждения.
-                 * Поэтому дополнительный множитель { разница цен } / { минимальная разница цен }
-                 */
-                if (time - imbalance.getEnd() >
-                        POSSIBLE_COMPLETE_TIME_WINDOW * (imbalance.getMax() - imbalance.getMin()) / priceThreshold) {
-                    state = ImbalanceState.POSSIBLE_COMPLETED;
-                }
-            }
-            case POSSIBLE_COMPLETED -> {
-                /* Check some time if it is stopped. If after some time it is finally stopped?
-                 *    yes - change state to COMPLETED, return
-                 *    no - change state to PROGRESS
-                 *
-                 * Before got result - { return without state change }
-                 */
 
-                if (imbalance.getType() == Imbalance.Type.UP) {
-                    // If the min/max is changed -> change state to PROGRESS, update min/max
-                    if (price > imbalance.getMax()) {
-                        imbalance.setMax(price);
-                        imbalance.setEnd(time);
-                        state = ImbalanceState.PROGRESS;
-                        break;
-                    }
-                } else {
-                    if (price < imbalance.getMin()) {
-                        imbalance.setMin(price);
-                        imbalance.setEnd(time);
-                        state = ImbalanceState.PROGRESS;
-                        break;
-                    }
-                }
-                if (time - imbalance.getEnd() >
-                        COMPLETE_TIME_WINDOW * (imbalance.getMax() - imbalance.getMin()) / priceThreshold) {
-                    state = ImbalanceState.COMPLETED;
-                    imbalance.setCompleteTime(time);
-                }
+            double priceChange = Math.abs(currentPrice - previousPrice);
+            if (priceChange > PRICE_CHANGE_THRESHOLD) {
+                double speed = priceChange / (currentTime - previousTime);
 
-            }
-            case COMPLETED -> {
-                //TODO wait for SEARCH_TIME_WINDOW before reset and look for another imbalance
-                if (time - imbalance.getEnd() > SEARCH_TIME_WINDOW) {
-                    imbalance = null;
-                    state = ImbalanceState.SEARCH_IMBALANCE;
-                }
+                if (speed > SPEED_THRESHOLD_PER_MILLISECOND) {
+                    if (initialTime == null) {
+                        initialTime = previousTime;
+                        initialPrice = previousPrice;
+                    }
 
+                    //TODO combine if previous imbalance meets condition
+                    double nextSpeed = Math.abs(initialPrice - previousPrice) / (initialTime - previousTime);
+                    if (nextSpeed < speed) {
+                        currentImbalance = new Imbalance(previousTime, previousPrice, currentTime, currentPrice);
+                        currentState = ImbalanceState.IMBALANCE_IN_PROGRESS;
+                        return;
+                    }
+                }
             }
         }
     }
 
-    private void updateData(long time, double price) {
-        if (data == null) {
-            data = new TreeMap<>(marketData.subMap(time - SEARCH_TIME_WINDOW, true, time, true));
-            max = data.entrySet().stream()
-                    .max(Map.Entry.comparingByValue())
-                    .orElseThrow();
-            min = data.entrySet().stream()
-                    .min(Map.Entry.comparingByValue())
-                    .orElseThrow();
-            step.addAndGet(time);
-            return;
-        }
+    private void trackImbalanceProgress(long currentTime, double currentPrice) {
+        double priceChange = Math.abs(currentPrice - currentImbalance.getStartPrice());
+        long timeElapsed = currentTime - currentImbalance.getStartTime();
+        double speed = priceChange / timeElapsed;
 
-        data.put(time, price);
-        Long removed = null;
-        if (data.size() > SEARCH_TIME_WINDOW / 1000L) {
-            removed = data.firstKey();
-            data.remove(data.firstKey());
-        }
-
-        // skip every 60 seconds when imbalance is completed or empty
-        if (state == ImbalanceState.COMPLETED || state == ImbalanceState.SEARCH_IMBALANCE) {
-            if (time < step.get()) {
-                return;
-            } else {
-                step.addAndGet(20000L);
+        if (speed > SPEED_THRESHOLD_PER_MILLISECOND) {
+            updateImbalanceEndPrice(currentTime, currentPrice, ImbalanceState.IMBALANCE_IN_PROGRESS);
+            if (currentTime - currentImbalance.getEndTime() > POSSIBLE_END_TIME) {
+                currentState = ImbalanceState.SEARCHING_POTENTIAL_END_POINT;
             }
+
         } else {
-            step.set(time);
+            currentState = ImbalanceState.SEARCHING_POTENTIAL_END_POINT;
         }
+    }
 
-        if (price > max.getValue()) {
-            max = new AbstractMap.SimpleEntry<>(time, price);
-        } else if (removed != null && !data.containsKey(removed)) {
-            max = data.entrySet().stream()
-                    .max(Map.Entry.comparingByValue())
-                    .orElseThrow();
+    private void searchingPossibleEndPoint(long currentTime, double currentPrice) {
+        updateImbalanceEndPrice(currentTime, currentPrice, ImbalanceState.IMBALANCE_IN_PROGRESS);
+
+        if (currentTime - currentImbalance.getEndTime() > EXACT_END_TIME) {
+            currentState = ImbalanceState.POTENTIAL_END_POINT_FOUND;
         }
+    }
 
-        if (price < min.getValue()) {
-            min = new AbstractMap.SimpleEntry<>(time, price);
-        } else if (removed != null && !data.containsKey(removed)) {
-            min = data.entrySet().stream()
-                    .min(Map.Entry.comparingByValue())
-                    .orElseThrow();
+    private void evaluatePossibleEndPointFound(long currentTime, double currentPrice) {
+        updateImbalanceEndPrice(currentTime, currentPrice, ImbalanceState.IMBALANCE_IN_PROGRESS);
+
+        if (currentTime - currentImbalance.getEndTime() > COMPLETE_TIME) {
+            currentImbalance.setCompleteTime(currentTime);
+            currentState = ImbalanceState.IMBALANCE_COMPLETED;
+        }
+    }
+
+    private void updateImbalanceEndPrice(long currentTime, double currentPrice, ImbalanceState state) {
+        switch (currentImbalance.getType()) {
+            case UP -> {
+                if (currentPrice > currentImbalance.getEndPrice()) {
+                    currentImbalance.setEndPrice(currentPrice);
+                    currentImbalance.setEndTime(currentTime);
+                    currentState = state;
+                }
+            }
+            case DOWN -> {
+                if (currentPrice < currentImbalance.getEndPrice()) {
+                    currentImbalance.setEndPrice(currentPrice);
+                    currentImbalance.setEndTime(currentTime);
+                    currentState = state;
+                }
+            }
+        }
+    }
+
+    private void resetImbalanceState() {
+        lastImbalance = Imbalance.of(currentImbalance);
+        currentImbalance = null;
+        currentState = ImbalanceState.SEARCHING_FOR_IMBALANCE;
+    }
+
+    private void updateData(long time, double price) {
+        data.put(time, price);
+        if (data.size() > 10800) {
+            data.pollFirstEntry();
         }
     }
 
     public Imbalance getImbalance() {
-        return imbalance;
+        return currentImbalance;
     }
 
     public ImbalanceState getState() {
-        return state;
+        return currentState;
     }
 }

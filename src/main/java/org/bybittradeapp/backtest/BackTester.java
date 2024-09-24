@@ -29,19 +29,20 @@ public class BackTester {
     private final ExchangeSimulator simulator;
     private final ImbalanceService imbalanceService;
     private final Account account;
-    private final UiDataService uiDataService;
+    private final List<MarketKlineEntry> uiMarketData;
 
-    public BackTester(TreeMap<Long, Double> marketData) {
+
+    public BackTester(TreeMap<Long, Double> marketData, List<MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
+        this.uiMarketData = uiMarketData;
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
         VolatilityService volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService(marketData, volatilityService);
+        this.imbalanceService = new ImbalanceService(volatilityService);
 
-        TrendService trendService = new TrendService(marketData, volatilityService);
+        TrendService trendService = new TrendService(volatilityService);
         ExtremumService extremumService = new ExtremumService(marketData, volatilityService);
         this.strategy = new Strategy(simulator, marketData, imbalanceService, extremumService, trendService, account);
-        this.uiDataService = new UiDataService(MarketInterval.FIVE_MINUTES);
     }
 
     public void runTests() {
@@ -55,7 +56,7 @@ public class BackTester {
         Log.log(String.format("starting backtest with balance %.2f$", account.getBalance()));
         marketData.forEach((key, value) -> {
             imbalanceService.onTick(key, value);
-            if (imbalanceService.getState() == ImbalanceState.COMPLETED && (imbalances.isEmpty() ||
+            if (imbalanceService.getState() == ImbalanceState.IMBALANCE_COMPLETED && (imbalances.isEmpty() ||
                     !imbalances.get(imbalances.size() - 1).equals(imbalanceService.getImbalance()))) {
                 imbalances.add(imbalanceService.getImbalance());
             }
@@ -67,7 +68,6 @@ public class BackTester {
         });
         Log.log(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
-        List<MarketKlineEntry> uiMarketData = uiDataService.getMarketData();
         JsonUtils.updateAnalysedData(new ArrayList<>(), imbalances, simulator.getPositions(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalances, simulator.getPositions());
     }
