@@ -1,8 +1,5 @@
 package org.bybittradeapp.backtest;
 
-import com.bybit.api.client.domain.market.MarketInterval;
-import org.bybittradeapp.analysis.domain.Imbalance;
-import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.analysis.service.ExtremumService;
 import org.bybittradeapp.analysis.service.ImbalanceService;
 import org.bybittradeapp.analysis.service.TrendService;
@@ -12,7 +9,6 @@ import org.bybittradeapp.backtest.service.ExchangeSimulator;
 import org.bybittradeapp.backtest.service.Strategy;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
-import org.bybittradeapp.ui.service.UiDataService;
 import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
@@ -29,7 +25,7 @@ public class BackTester {
     private final ExchangeSimulator simulator;
     private final ImbalanceService imbalanceService;
     private final Account account;
-    private final List<MarketKlineEntry> uiMarketData;
+    private List<MarketKlineEntry> uiMarketData;
 
 
     public BackTester(TreeMap<Long, Double> marketData, List<MarketKlineEntry> uiMarketData) {
@@ -50,16 +46,12 @@ public class BackTester {
         long startTime = Instant.now().toEpochMilli();
         long firstKey = marketData.firstKey();
         long lastKey = marketData.lastKey();
-
-        List<Imbalance> imbalances = new ArrayList<>();
+//        long firstKey = 1722816000000L;
+//        long lastKey = 1722938400000L;
 
         Log.log(String.format("starting backtest with balance %.2f$", account.getBalance()));
         marketData.forEach((key, value) -> {
             imbalanceService.onTick(key, value);
-            if (imbalanceService.getState() == ImbalanceState.IMBALANCE_COMPLETED && (imbalances.isEmpty() ||
-                    !imbalances.get(imbalances.size() - 1).equals(imbalanceService.getImbalance()))) {
-                imbalances.add(imbalanceService.getImbalance());
-            }
             strategy.onTick(key, value);
             simulator.onTick(key, value);
 
@@ -68,8 +60,7 @@ public class BackTester {
         });
         Log.log(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
-        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalances, simulator.getPositions(), uiMarketData);
-        JsonUtils.serializeAll(new ArrayList<>(), imbalances, simulator.getPositions());
+        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
+        JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions());
     }
 }
-

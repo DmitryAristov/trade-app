@@ -7,15 +7,16 @@ import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
+import java.util.Iterator;
+import java.util.Comparator;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-
 public class ExchangeSimulator implements Tickle {
+    public static final double TRADE_COMMISSION = 0.0001;
+
     private final List<Order> limitOrders;
     private final List<Position> positions;
     private final Account account;
@@ -79,6 +80,8 @@ public class ExchangeSimulator implements Tickle {
                                 closePosition(position, account, time, price);
                             } else if (position.getStopLoss() >= price) {
                                 closePosition(position, account, time, price);
+                            } else {
+                                position.setClosePrice(price);
                             }
                         }
                         case SHORT -> {
@@ -86,6 +89,8 @@ public class ExchangeSimulator implements Tickle {
                                 closePosition(position, account, time, price);
                             } else if (position.getStopLoss() <= price) {
                                 closePosition(position, account, time, price);
+                            } else {
+                                position.setClosePrice(price);
                             }
                         }
                     }
@@ -93,16 +98,17 @@ public class ExchangeSimulator implements Tickle {
     }
 
     private void openPosition(Order order, long time, double price) {
-        Position position = new Position(order, price, time, account.calculatePositionSize());
+        Position position = new Position(order, price, time);
         positions.add(position);
+        account.updateBalance(position);
         Log.log(String.format("%s is opened with price %f on %s", position.getOrder().getType(), price, Instant.ofEpochMilli(time)));
     }
 
     public static void closePosition(Position position, Account account, long time, double price) {
         position.close(time, price);
         Log.log(String.format("%s is closed with PL = ||||   %f   |||| on %s",
-                position.getOrder().getType(), position.getProfitLoss(), Instant.ofEpochMilli(time)));
-        account.updateBalance(position.getProfitLoss());
+                position.getOrder().getType(), position.getProfitLoss() * account.getCredit(), Instant.ofEpochMilli(time)));
+        account.updateBalance(position);
     }
 
     public List<Position> getOpenPositions() {
@@ -115,6 +121,10 @@ public class ExchangeSimulator implements Tickle {
 
     public List<Order> getLimitOrders() {
         return limitOrders.stream().filter(order -> !order.isFilled()).collect(Collectors.toList());
+    }
+
+    public Optional<Position> getLastClosedPosition() {
+        return positions.stream().filter(Position::isClosed).max(Comparator.comparing(Position::getCloseTime));
     }
 }
 

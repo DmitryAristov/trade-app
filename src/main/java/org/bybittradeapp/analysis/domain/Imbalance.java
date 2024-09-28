@@ -4,7 +4,6 @@ import java.io.Serializable;
 
 public class Imbalance implements Serializable {
 
-
     public enum Type { UP, DOWN }
 
     private Type type;
@@ -13,6 +12,9 @@ public class Imbalance implements Serializable {
     private double endPrice;
     private long endTime;
     private long completeTime;
+    private double completePrice;
+    private int completesCount = 0;
+    private int combinesCount = 0;
 
     public Imbalance(long startTime, double startPrice, long endTime, double endPrice) {
         this.startTime = startTime;
@@ -70,6 +72,30 @@ public class Imbalance implements Serializable {
 
     public void setCompleteTime(long completeTime) {
         this.completeTime = completeTime;
+    }
+
+    public double getCompletePrice() {
+        return completePrice;
+    }
+
+    public void setCompletePrice(double completePrice) {
+        this.completePrice = completePrice;
+    }
+
+    public void incrementCompletesCount() {
+        this.completesCount++;
+    }
+
+    public int getCompletesCount() {
+        return completesCount;
+    }
+
+    public void setCombinesCount(int combinesCount) {
+        this.combinesCount = combinesCount;
+    }
+
+    public int getCombinesCount() {
+        return combinesCount;
     }
 
     public static Imbalance of(Imbalance imbalance) {

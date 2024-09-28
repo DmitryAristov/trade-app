@@ -14,9 +14,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.bybittradeapp.Main.HISTORICAL_DATA_SIZE;
-import static org.bybittradeapp.Main.SYMBOL;
-import static org.bybittradeapp.Main.mapper;
+import static org.bybittradeapp.Main.*;
 
 public class VolatilityService {
 

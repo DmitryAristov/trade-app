@@ -1,7 +1,5 @@
 package org.bybittradeapp.analysis;
 
-import org.bybittradeapp.analysis.domain.Imbalance;
-import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.analysis.service.ExtremumService;
 import org.bybittradeapp.analysis.service.ImbalanceService;
 import org.bybittradeapp.analysis.service.TrendService;
@@ -11,11 +9,11 @@ import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
 import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 import static org.bybittradeapp.logging.Log.logProgress;
 
@@ -41,25 +39,24 @@ public class Analyser {
         long startTime = Instant.now().toEpochMilli();
 //        long firstKey = marketData.firstKey();
 //        long lastKey = marketData.lastKey();
-        long firstKey = 1726689600000L;
-        long lastKey = 1726707600000L;
+        long firstKey = 1722816000000L;
+        long lastKey = 1722938400000L;
 
         Log.log("starting analysis of technical instruments");
-        List<Imbalance> imbalances = new ArrayList<>();
         marketData.subMap(firstKey, lastKey).forEach((key, value) -> {
-
             imbalanceService.onTick(key, value);
-            if (imbalanceService.getState() == ImbalanceState.IMBALANCE_COMPLETED && (imbalances.isEmpty() ||
-                    !imbalances.get(imbalances.size() - 1).equals(imbalanceService.getImbalance()))) {
-                imbalances.add(imbalanceService.getImbalance());
-            }
 
             double progress = ((double) (key - firstKey)) / ((double) (lastKey - firstKey));
             logProgress(startTime, step, progress, "analysis");
         });
         Log.log("analysis of technical instruments finished");
 
-        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalances, new ArrayList<>(), uiMarketData);
-        JsonUtils.serializeAll(new ArrayList<>(), imbalances, new ArrayList<>());
+        var uiMarketDataFiltered = uiMarketData.stream()
+                .filter(entry -> entry.getStartTime() >= firstKey - 5 * 60 * 1000L && entry.getStartTime() <= lastKey + 5 * 60 * 1000L)
+                .collect(Collectors.toList());
+        JsonUtils.updateMarketData(uiMarketDataFiltered);
+
+        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketDataFiltered);
+        JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>());
     }
 }

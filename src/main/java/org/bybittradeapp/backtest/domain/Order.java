@@ -7,6 +7,7 @@ public class Order implements Serializable {
     private OrderType type;
     private ExecutionType executionType;
     private double price;
+    private double moneyAmount;
     private boolean filled = false;
     private boolean canceled = false;
     private double takeProfit = -1;
@@ -94,6 +95,14 @@ public class Order implements Serializable {
 
     public void setExecutionType(ExecutionType executionType) {
         this.executionType = executionType;
+    }
+
+    public double getMoneyAmount() {
+        return moneyAmount;
+    }
+
+    public void setMoneyAmount(double moneyAmount) {
+        this.moneyAmount = moneyAmount;
     }
 }
 

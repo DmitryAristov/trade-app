@@ -1,7 +1,7 @@
 package org.bybittradeapp.backtest.domain;
 
 public class Account {
-    private static final int BALANCE = 100000;
+    private static final int BALANCE = 4000;
     private static final double RISK_LEVEL = 50.0;
     private static final int CREDIT_LEVEL = 3;
 
@@ -26,8 +26,18 @@ public class Account {
         return balance * (riskPercentage / 100.0);
     }
 
-    public void updateBalance(double profitLoss) {
-        this.balance += profitLoss * credit;
+    public void updateBalance(Position position) {
+        if (position.isOpen()) {
+            this.balance -= position.getOpenCommission();
+            return;
+        }
+        if (position.isClosed()) {
+            this.balance += position.getProfitLoss() * credit - position.getCloseCommission();
+        }
+    }
+
+    public long getCredit() {
+        return credit;
     }
 }
 

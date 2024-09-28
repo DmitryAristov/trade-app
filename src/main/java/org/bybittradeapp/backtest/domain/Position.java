@@ -2,6 +2,8 @@ package org.bybittradeapp.backtest.domain;
 
 import java.io.Serializable;
 
+import static org.bybittradeapp.backtest.service.ExchangeSimulator.TRADE_COMMISSION;
+
 public class Position implements Serializable {
     private final Order order;
     private final double openPrice;
@@ -10,6 +12,8 @@ public class Position implements Serializable {
     private double closePrice;
     private final long createTime;
     private long closeTime;
+    private double openCommission;
+    private double closeCommission;
 
     /**
      * position size (in BTC)
@@ -17,13 +21,14 @@ public class Position implements Serializable {
     private final double amount;
     private boolean isOpen = true;
 
-    public Position(Order order, double price, long time, double amountOfMoney) {
+    public Position(Order order, double price, long time) {
         this.order = order;
         this.openPrice = price;
         this.createTime = time;
-        this.amount = amountOfMoney / price;
+        this.amount = order.getMoneyAmount() / price;
         this.takeProfit = order.getTakeProfit();
         this.stopLoss = order.getStopLoss();
+        this.openCommission = order.getMoneyAmount() * TRADE_COMMISSION;
     }
 
     /**
@@ -33,6 +38,7 @@ public class Position implements Serializable {
         this.closePrice = price;
         this.closeTime = time;
         this.isOpen = false;
+        this.closeCommission = amount * price * TRADE_COMMISSION;
     }
 
     /**
@@ -79,6 +85,34 @@ public class Position implements Serializable {
 
     public double getClosePrice() {
         return closePrice;
+    }
+
+    public boolean isZeroLoss() {
+        return switch (order.getType()) {
+            //TODO
+            case LONG -> openPrice <= stopLoss;
+            case SHORT -> openPrice >= stopLoss;
+        };
+    }
+
+    public boolean isClosed() {
+        return !isOpen;
+    }
+
+    public double getOpenCommission() {
+        return openCommission;
+    }
+
+    public double getCloseCommission() {
+        return closeCommission;
+    }
+
+    public void setClosePrice(double closePrice) {
+        this.closePrice = closePrice;
+    }
+
+    public double getAmount() {
+        return amount;
     }
 }
 
