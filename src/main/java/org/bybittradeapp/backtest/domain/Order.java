@@ -4,49 +4,68 @@ import java.io.Serializable;
 
 public class Order implements Serializable {
 
+    /**
+     * Тип ордера: вверх или вниз
+     */
     private OrderType type;
+
+    /**
+     * Тип ордера: рыночный или лимитный. Рыночный исполняется прямо в момент создания,
+     * лимитный исполняется по цене исполнения (executionPrice)
+     */
     private ExecutionType executionType;
-    private double price;
+    private double executionPrice;
+
+    /**
+     * Сумма денег ордера. Кредитное плечо уже учтено
+     */
     private double moneyAmount;
     private boolean filled = false;
     private boolean canceled = false;
-    private double takeProfit = -1;
-    private double stopLoss = -1;
+    private double takeProfitPrice = -1;
+    private double stopLossPrice = -1;
     private long createTime;
 
     public Order() { }
 
     /**
-     * Ордер исполнен
+     * Исполнить ордер
      */
     public void fill() {
         this.filled = true;
     }
 
     /**
-     * Ордер отменен
+     * Отменить ордер
      */
     public void cancel() {
         this.canceled = true;
     }
 
     /**
-     * Проверяет если лимитный ордер можно исполнить
+     * Проверяет если лимитный ордер можно исполнить.
+     * Возвращает ошибку если метод вызван на рыночном ордере.
      */
-    public boolean isExecutable(long time, double price) {
-        if (this.getType() == OrderType.LONG) {
-            return this.getPrice() >= price;
+    public boolean isExecutable(double currentPrice) {
+        if (this.executionType == ExecutionType.LIMIT) {
+            if (this.type == OrderType.LONG) {
+                return this.executionPrice >= currentPrice;
+            } else {
+                return this.executionPrice <= currentPrice;
+            }
         } else {
-            return this.getPrice() <= price;
+            throw new RuntimeException("Market order executes at create time. It cannot be executable or not.");
         }
     }
 
     /**
-     * Устанавливает условия закрытия позиции
+     * Устанавливает цены закрытия позиции
+     * @param stopLoss цена автоматического закрытия позиции в минус
+     * @param takeProfit цена автоматического закрытия позиции в плюс
      */
     public void setTP_SL(double takeProfit, double stopLoss) {
-        this.takeProfit = takeProfit;
-        this.stopLoss = stopLoss;
+        this.takeProfitPrice = takeProfit;
+        this.stopLossPrice = stopLoss;
     }
 
     public OrderType getType() {
@@ -57,10 +76,6 @@ public class Order implements Serializable {
         return executionType;
     }
 
-    public double getPrice() {
-        return price;
-    }
-
     public boolean isFilled() {
         return filled;
     }
@@ -69,20 +84,16 @@ public class Order implements Serializable {
         return canceled;
     }
 
-    public double getTakeProfit() {
-        return takeProfit;
+    public double getTakeProfitPrice() {
+        return takeProfitPrice;
     }
 
-    public double getStopLoss() {
-        return stopLoss;
+    public double getStopLossPrice() {
+        return stopLossPrice;
     }
 
-    public void setPrice(double price) {
-        this.price = price;
-    }
-
-    public long getCreateTime() {
-        return createTime;
+    public void setExecutionPrice(double executionPrice) {
+        this.executionPrice = executionPrice;
     }
 
     public void setCreateTime(long createTime) {

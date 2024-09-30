@@ -98,15 +98,14 @@ public class Imbalance implements Serializable {
         return combinesCount;
     }
 
-    public static Imbalance of(Imbalance imbalance) {
-        Imbalance result = new Imbalance();
-        result.setStartTime(imbalance.getStartTime());
-        result.setStartPrice(imbalance.getStartPrice());
-        result.setEndTime(imbalance.getEndTime());
-        result.setEndPrice(imbalance.getEndPrice());
-        result.setType(imbalance.getType());
-        result.setCompleteTime(imbalance.getCompleteTime());
-
-        return result;
+    @Override
+    public String toString() {
+        return "Imbalance{" +
+                "endTime=" + endTime +
+                ", endPrice=" + endPrice +
+                ", startPrice=" + startPrice +
+                ", startTime=" + startTime +
+                ", type=" + type +
+                '}';
     }
 }

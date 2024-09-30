@@ -1,11 +1,10 @@
 package org.bybittradeapp.analysis.service;
 
 import org.bybittradeapp.analysis.domain.Extremum;
-import org.bybittradeapp.backtest.service.Tickle;
 import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.jetbrains.annotations.NotNull;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -19,7 +18,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-public class ExtremumService implements Tickle {
+public class ExtremumService {
     public static final long MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW = 10L * 60L * 60L * 1000L;
     public static final long MIN_MAX_SEARCH_ON_MA_TIME_WINDOW = 100L * 60L * 1000L ;
     public static final long SEARCH_TIME_WINDOW = 60L * 24L * 60L * 60L * 1000L; // 60 seconds * 60 minutes * 24 hours * 60 days
@@ -27,27 +26,26 @@ public class ExtremumService implements Tickle {
 
     private final long initialMaTimeWindow;
     private final double minPriceDiff;
-    private TreeMap<Long, Double> data;
-    private final TreeMap<Long, Double> marketData;
+    private TreeMap<Long, MarketEntry> data;
+    private final TreeMap<Long, MarketEntry> marketData;
 
-    public ExtremumService(TreeMap<Long, Double> marketData, VolatilityService volatilityService) {
+    public ExtremumService(TreeMap<Long, MarketEntry> marketData, VolatilityService volatilityService) {
         this.marketData = marketData;
         this.initialMaTimeWindow = Math.round(volatilityService.getVolatility() * 120L * 60L * 1000L);
         this.minPriceDiff = volatilityService.getVolatility() * volatilityService.getAverage() * MIN_DIFF_BETWEEN_EXTREMUMS;
     }
 
-    @Override
-    public void onTick(long time, double price) {
-        //TODO
+    public void onTick(long time, MarketEntry marketEntry) {
+        //TODO(2) Переписать чтобы экстремумы обновлялись каждый тик
 //        updateData(time, price);
     }
 
-    private void updateData(long time, double price) {
+    private void updateData(long time, MarketEntry marketEntry) {
         // All market data. Need to filter SEARCH_TIME_WINDOW values only
         if (data == null) {
             data = new TreeMap<>(marketData.subMap(time - SEARCH_TIME_WINDOW, true, time, true));
         } else {
-            data.put(time, price);
+            data.put(time, marketEntry);
             data.entrySet().removeIf(entry -> time - entry.getKey() > SEARCH_TIME_WINDOW);
         }
     }
@@ -90,22 +88,22 @@ public class ExtremumService implements Tickle {
                         .min(Comparator.comparing(entry -> entry.getKey() == extremum.getTimestamp()))
                         .ifPresent(entry -> {
                             if (extremum.getType() == Extremum.Type.MAX) {
-                                Map.Entry<Long, Double> max = marketData.entrySet().stream()
+                                Map.Entry<Long, MarketEntry> max = marketData.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
-                                        .max(Map.Entry.comparingByValue())
+                                        .max(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
                                         .get();
 
-                                extrema.add(new Extremum(max.getKey(), max.getValue(), Extremum.Type.MAX));
+                                extrema.add(new Extremum(max.getKey(), (max.getValue().high() + max.getValue().high()) / 2., Extremum.Type.MAX));
                             }
                             if (extremum.getType() == Extremum.Type.MIN) {
-                                Map.Entry<Long, Double> min = marketData.entrySet().stream()
+                                Map.Entry<Long, MarketEntry> min = marketData.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
-                                        .min(Map.Entry.comparingByValue())
+                                        .min(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
                                         .get();
 
-                                extrema.add(new Extremum(min.getKey(), min.getValue(), Extremum.Type.MIN));
+                                extrema.add(new Extremum(min.getKey(), (min.getValue().high() + min.getValue().high()) / 2., Extremum.Type.MIN));
                             }
                         }));
 
@@ -131,7 +129,7 @@ public class ExtremumService implements Tickle {
      * In some cases between MIN and MAX we have MIN (or MAX) which is lower (or higher) than founded one
      * In this case we need to update its price and timestamp to the right ones.
      */
-    private void correctExtremumsIfThereOneIsBetween(TreeMap<Long, Double> marketData, List<Extremum> extrema) {
+    private void correctExtremumsIfThereOneIsBetween(TreeMap<Long, MarketEntry> marketData, List<Extremum> extrema) {
 
         for (int i = 1; i < extrema.size(); i++) {
             if (extrema.get(i - 1).getType() == extrema.get(i).getType()) {
@@ -145,7 +143,7 @@ public class ExtremumService implements Tickle {
             TreeMap<Long, Double> marketDataBetweenMinMax = marketData.entrySet().stream()
                     .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < curr.getTimestamp())
                     .collect(Collectors.toMap(Map.Entry::getKey,
-                            Map.Entry::getValue,
+                            entry_ -> (entry_.getValue().high() + entry_.getValue().low()) / 2.,
                             (first, second) -> first,
                             TreeMap::new
                     ));
@@ -209,7 +207,7 @@ public class ExtremumService implements Tickle {
      * This step we remove maximum < minimum and minimum > maximum pairs
      * Example we convert { MAX (100), MIN (90), MAX (80), MIN (70) } -> { MAX (100), MIN (70) }
      */
-    private void removeMinHigherThanMax(TreeMap<Long, Double> marketData, List<Extremum> extrema) {
+    private void removeMinHigherThanMax(TreeMap<Long, MarketEntry> marketData, List<Extremum> extrema) {
         List<Extremum> toRemove;
 
         do {
@@ -220,13 +218,13 @@ public class ExtremumService implements Tickle {
                 final Extremum next = extrema.get(i + 1);
                 if (prev.getType() == Extremum.Type.MAX) {
                     if (curr.getPrice() > prev.getPrice()) {
-                        Optional<Map.Entry<Long, Double>> minBetweenPrevNext = marketData.entrySet().stream()
+                        Optional<Map.Entry<Long, MarketEntry>> minBetweenPrevNext = marketData.entrySet().stream()
                                 .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
-                                .min(Map.Entry.comparingByValue());
+                                .min(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.));
 
                         if (minBetweenPrevNext.isPresent() &&
-                                minBetweenPrevNext.get().getValue() < prev.getPrice()) {
-                            curr.setPrice(minBetweenPrevNext.get().getValue());
+                                (minBetweenPrevNext.get().getValue().low() + minBetweenPrevNext.get().getValue().high()) / 2. < prev.getPrice()) {
+                            curr.setPrice((minBetweenPrevNext.get().getValue().low() + minBetweenPrevNext.get().getValue().high()) / 2.);
                             curr.setTimestamp(minBetweenPrevNext.get().getKey());
                             Log.log("MIN > MAX corrected");
                         } else {
@@ -236,13 +234,13 @@ public class ExtremumService implements Tickle {
                     }
                 } else {
                     if (curr.getPrice() < prev.getPrice()) {
-                        Optional<Map.Entry<Long, Double>> maxBetweenPrevNext = marketData.entrySet().stream()
+                        Optional<Map.Entry<Long, MarketEntry>> maxBetweenPrevNext = marketData.entrySet().stream()
                                 .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
-                                .max(Map.Entry.comparingByValue());
+                                .max(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.));
 
                         if (maxBetweenPrevNext.isPresent() &&
-                                maxBetweenPrevNext.get().getValue() < prev.getPrice()) {
-                            curr.setPrice(maxBetweenPrevNext.get().getValue());
+                                (maxBetweenPrevNext.get().getValue().low() + maxBetweenPrevNext.get().getValue().high()) / 2. < prev.getPrice()) {
+                            curr.setPrice((maxBetweenPrevNext.get().getValue().low() + maxBetweenPrevNext.get().getValue().high()) / 2.);
                             curr.setTimestamp(maxBetweenPrevNext.get().getKey());
                             Log.log("MAX < MIN corrected");
                         } else {
@@ -291,7 +289,7 @@ public class ExtremumService implements Tickle {
     }
 
     @NotNull
-    private List<Extremum> mapExtremumsToNewMa(TreeMap<Long, Double> marketData, List<Extremum> extremumsIn,
+    private List<Extremum> mapExtremumsToNewMa(TreeMap<Long, MarketEntry> marketData, List<Extremum> extremumsIn,
                                                long maTimeWindow) {
         TreeMap<Long, Double> average = movingAverage(marketData, maTimeWindow);
         List<Extremum> extremums = findExtremums(average);
@@ -306,7 +304,7 @@ public class ExtremumService implements Tickle {
     /**
      * Method calculates moving average (MA) based on market data and average window size
      */
-    private TreeMap<Long, Double> movingAverage(TreeMap<Long, Double> marketData, long timeWindow) {
+    private TreeMap<Long, Double> movingAverage(TreeMap<Long, MarketEntry> marketData, long timeWindow) {
         if (timeWindow <= 0) {
             throw new IllegalArgumentException("Invalid timeWindow: " + timeWindow);
         }
@@ -315,23 +313,24 @@ public class ExtremumService implements Tickle {
         double sum = 0;
 
         // Get an iterator over the TreeMap's entry set
-        Iterator<Map.Entry<Long, Double>> iterator = marketData.entrySet().iterator();
-        LinkedList<Map.Entry<Long, Double>> window = new LinkedList<>();
+        Iterator<Map.Entry<Long, MarketEntry>> iterator = marketData.entrySet().iterator();
+        LinkedList<Map.Entry<Long, MarketEntry>> window = new LinkedList<>();
 
         /*
          * Slide the window across the data
          */
         while (iterator.hasNext()) {
-            Map.Entry<Long, Double> currentEntry = iterator.next();
+            Map.Entry<Long, MarketEntry> currentEntry = iterator.next();
 
             // Add the new price to the sum
             window.addLast(currentEntry);
-            sum += currentEntry.getValue();
+            sum += (currentEntry.getValue().high() + currentEntry.getValue().low()) / 2.;
 
             // Check the time difference between the first and last elements of the window
             while (!window.isEmpty() && (window.getLast().getKey() - window.getFirst().getKey() > timeWindow)) {
                 // Remove the oldest price from the sum and the window
-                sum -= window.removeFirst().getValue();
+                MarketEntry entryToRemove = window.removeFirst().getValue();
+                sum -= (entryToRemove.high() + entryToRemove.low()) /2.;
             }
 
             // Calculate the moving average for the current window and add it to the result map

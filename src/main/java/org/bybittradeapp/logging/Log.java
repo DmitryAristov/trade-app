@@ -33,6 +33,9 @@ public class Log {
             double progress,
             String processName
     ) {
+        if (progress == 0) {
+            return;
+        }
         if (Instant.now().toEpochMilli() - startTime > step.get()) {
             LocalDateTime startTime_ = LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.of("+3"));
             String formatted = startTime_.plusSeconds(

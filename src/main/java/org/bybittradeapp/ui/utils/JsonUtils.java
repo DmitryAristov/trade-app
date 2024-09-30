@@ -7,48 +7,46 @@ import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
-import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
+import org.bybittradeapp.ui.domain.MarketKlineEntry;
 import org.bybittradeapp.analysis.domain.Extremum;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.TreeMap;
 
 import static org.bybittradeapp.Main.mapper;
-import static org.bybittradeapp.marketdata.service.MarketDataService.PATH_RESOURCES;
 
 /**
- * Temporary utility class for UI purposes
+ * Временный класс только для отображения в UI
  */
 public class JsonUtils {
-    public static final String TRADING_VUE_PATH = "/home/dmitriy/Projects/trading-vue-js";
-    public static final long ZONE_DELAY = 10800000L;
+    public static final String DATA_JSON_FILE_PATH = "/home/dmitriy/Projects/trading-vue-js/data/data.json";
+    public static final long ZONE_DELAY_MILLS = 10800000L;
 
-    public static void updateMarketData(List<MarketKlineEntry> uiMarketData) {
+    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/positions");
+    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances");
+    private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/extremums/");
+
+    public static void updateMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
         Log.log("ohlcv with:");
         Log.log(uiMarketData.size() + " uiMarketData");
 
         final ArrayNode ohlcv = mapper.createArrayNode();
-        uiMarketData.forEach(entry -> {
+        uiMarketData.forEach((key, value) -> {
             ArrayNode entryNode = mapper.createArrayNode();
-            entryNode.add(entry.getStartTime() + ZONE_DELAY);
-            entryNode.add(entry.getOpenPrice());
-            entryNode.add(entry.getHighPrice());
-            entryNode.add(entry.getLowPrice());
-            entryNode.add(entry.getClosePrice());
+            entryNode.add(value.getStartTime() + ZONE_DELAY_MILLS);
+            entryNode.add(value.getOpenPrice());
+            entryNode.add(value.getHighPrice());
+            entryNode.add(value.getLowPrice());
+            entryNode.add(value.getClosePrice());
             ohlcv.add(entryNode);
         });
 
         try {
-            File file = new File(TRADING_VUE_PATH + "/data/data.json");
+            File file = new File(DATA_JSON_FILE_PATH);
             JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("ohlcv")) {
@@ -62,43 +60,14 @@ public class JsonUtils {
             mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.log("error updateMarketData: " + e.getMessage());
         }
-    }
-
-    public static List<MarketKlineEntry> getMarketData() {
-        try {
-            File file = new File(TRADING_VUE_PATH + "/data/data.json");
-            JsonNode rootNode = mapper.readTree(file);
-
-            if (rootNode.has("ohlcv")) {
-                return (List<MarketKlineEntry>) mapper.convertValue(mapper.readValue(file, JsonNode.class).get("ohlcv"), List.class).stream()
-                        .map(entry -> toMarketKLineEntry((List) entry))
-                        .collect(Collectors.toList());
-            } else {
-                return new ArrayList<>();
-            }
-
-        } catch (IOException e) {
-            return new ArrayList<>();
-        }
-    }
-
-    private static MarketKlineEntry toMarketKLineEntry(List entry) {
-        MarketKlineEntry result = new MarketKlineEntry();
-        result.setStartTime((Long) entry.get(0));
-        result.setOpenPrice((Double) entry.get(1));
-        result.setHighPrice((Double) entry.get(2));
-        result.setLowPrice((Double) entry.get(3));
-        result.setClosePrice((Double) entry.get(4));
-
-        return result;
     }
 
     public static void updateAnalysedData(List<Extremum> extrema,
                                           List<Imbalance> imbalances,
                                           List<Position> positions,
-                                          List<MarketKlineEntry> uiMarketData) {
+                                          TreeMap<Long, MarketKlineEntry> uiMarketData) {
         Log.log("onchart with:");
         Log.log(extrema.size() + " zones");
         Log.log(imbalances.size() + " imbalances");
@@ -122,7 +91,7 @@ public class JsonUtils {
         }
 
         try {
-            File file = new File(TRADING_VUE_PATH + "/data/data.json");
+            File file = new File(DATA_JSON_FILE_PATH);
             JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("onchart")) {
@@ -133,28 +102,28 @@ public class JsonUtils {
             mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.log("error updateAnalysedData: " + e.getMessage());
         }
     }
 
     private static void parseImbalances(List<Imbalance> imbalances,
-                                        List<MarketKlineEntry> uiMarketData,
+                                        TreeMap<Long, MarketKlineEntry> uiMarketData,
                                         ArrayNode onchart) {
 
         for (Imbalance imbalance : imbalances) {
-            Optional<Long> startTime = uiMarketData.stream()
+            Optional<Long> startTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime_ -> startTime_ < imbalance.getStartTime() + ZONE_DELAY)
+                    .filter(startTime_ -> startTime_ < imbalance.getStartTime() + ZONE_DELAY_MILLS)
                     .max(Comparator.comparing(Long::longValue));
 
-            Optional<Long> endTime = uiMarketData.stream()
+            Optional<Long> endTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(endTime_ -> endTime_ > imbalance.getEndTime() + ZONE_DELAY)
+                    .filter(endTime_ -> endTime_ > imbalance.getEndTime() + ZONE_DELAY_MILLS)
                     .min(Comparator.comparing(Long::longValue));
 
-            Optional<Long> completeTime = uiMarketData.stream()
+            Optional<Long> completeTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime() + ZONE_DELAY)
+                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime() + ZONE_DELAY_MILLS)
                     .min(Comparator.comparing(Long::longValue));
 
             if (startTime.isEmpty() || endTime.isEmpty() || completeTime.isEmpty()) {
@@ -220,18 +189,18 @@ public class JsonUtils {
     }
 
     private static void parsePositions(List<Position> positions,
-                                       List<MarketKlineEntry> uiMarketData,
+                                       TreeMap<Long, MarketKlineEntry> uiMarketData,
                                        ArrayNode onchart) {
 
         for (Position position : positions) {
-            Optional<Long> timeLeft = uiMarketData.stream()
+            Optional<Long> timeLeft = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime < position.getCreateTime() + ZONE_DELAY)
+                    .filter(startTime -> startTime < position.getOpenTime() + ZONE_DELAY_MILLS)
                     .max(Comparator.comparing(Long::longValue));
 
-            Optional<Long> timeRight = uiMarketData.stream()
+            Optional<Long> timeRight = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime > position.getCloseTime() + ZONE_DELAY)
+                    .filter(startTime -> startTime > position.getCloseTime() + ZONE_DELAY_MILLS)
                     .min(Comparator.comparing(Long::longValue));
             if (timeRight.isEmpty() || timeLeft.isEmpty()) {
                 continue;
@@ -271,16 +240,16 @@ public class JsonUtils {
     }
 
     private static void parseExtremums(List<Extremum> extrema,
-                                       List<MarketKlineEntry> uiMarketData,
+                                       TreeMap<Long, MarketKlineEntry> uiMarketData,
                                        ArrayNode onchart) {
 
         for (Extremum extremum : extrema) {
 
-            MarketKlineEntry time = uiMarketData.stream()
-                    .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp() + ZONE_DELAY)))
+            MarketKlineEntry time = uiMarketData.values().stream()
+                    .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp() + ZONE_DELAY_MILLS)))
                     .orElse(null);
 
-            if (time == null || uiMarketData.stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 8L * 60L * 60L * 1000L)) {
+            if (time == null || uiMarketData.values().stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 8L * 60L * 60L * 1000L)) {
                 continue;
             }
 
@@ -304,52 +273,19 @@ public class JsonUtils {
 
     public static void serializeAll(List<Extremum> extremums, List<Imbalance> imbalances, List<Position> positions) {
         if (!extremums.isEmpty()) {
-            serialize(extremums, "extremums");
+            extremumSerializer.serialize(extremums);
         }
 
         if (!imbalances.isEmpty()) {
-            serialize(imbalances, "imbalances");
+            imbalanceSerializer.serialize(imbalances);
         }
 
         if (!positions.isEmpty()) {
-            serialize(positions, "positions");
-        }
-    }
-
-    private static <T> void serialize(List<T> object, String fileName) {
-        try {
-            try (FileOutputStream fileOutputStream = new FileOutputStream(PATH_RESOURCES + "/" + fileName);
-                 ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
-            ) {
-                Log.log("serializing " + fileName);
-                objectOutputStream.writeObject(object);
-                Log.log(fileName + " [" + object.size() + "] serialized");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static <T> List<T> deserialize(String fileName) {
-        try (FileInputStream fileInputStream = new FileInputStream(PATH_RESOURCES + "/" + fileName);
-             ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)
-        ) {
-            Log.log("deserializing " + fileName);
-            List<T> result = (List<T>) objectInputStream.readObject();
-            Log.log(fileName + " [" + result.size() + "] deserialized");
-            return result;
-        } catch (IOException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return new ArrayList<>();
+            positionSerializer.serialize(positions);
         }
     }
 
     private record Segment(String name, String type, ArrayNode data, Settings settings) { }
 
     private record Settings(ArrayNode p1, ArrayNode p2, int lineWidth, String color) { }
-
-    public static void main(String[] args) {
-        updateAnalysedData(new ArrayList<>(), deserialize("imbalances"), deserialize("positions"), getMarketData());
-    }
 }

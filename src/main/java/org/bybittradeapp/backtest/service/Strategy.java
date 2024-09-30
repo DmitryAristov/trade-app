@@ -10,11 +10,25 @@ import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
 import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
+import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.TreeMap;
 
-public class Strategy implements Tickle {
+/**
+ * Класс описывающий стратегию открытия и закрытия сделок на основе технического анализа
+ */
+public class Strategy {
+    /**
+     * Текущее состояние программы.
+     * Lifecycle:
+     *   1. ждет имбаланс
+     *   2. имбаланс появился, ищет точку входа
+     *   3. точка входа найдена, открывает позицию(и)
+     *   4. ожидает закрытия позиции(й)
+     */
     public enum State {
         WAIT_IMBALANCE,
         ENTRY_POINT_SEARCH,
@@ -23,23 +37,29 @@ public class Strategy implements Tickle {
         WAIT_POSITIONS_CLOSED
     }
 
+    /**
+     * Начальная стоп цена, перед которой еще не выставлена без-убыточная стоп цена
+     */
     private static final double STOP_LOSS_THRESHOLD = 0.02;
+    /**
+     * Части от размера имбаланса для первого и второго тейка в случае если закрытие одной позиции происходит по частям.
+     *  Пример: имбаланс был 55000$ -> 59000$. Тогда его размер = 4000$.
+     *          При SHORT сделке первый тейк будет выставлен на 59000 - 4000 * 0.4 = 57400$.
+     */
     private static final double FIRST_TAKE_PROFIT_THRESHOLD = 0.4;
     private static final double SECOND_TAKE_PROFIT_THRESHOLD = 0.8;
-    private static final double THIRD_TAKE_PROFIT_THRESHOLD = 1.2;
 
     private final ExchangeSimulator simulator;
-    private final TreeMap<Long, Double> marketData;
+    private final TreeMap<Long, MarketEntry> marketData;
     private final ImbalanceService imbalanceService;
     private final ExtremumService extremumService;
 
-    //TODO в будущем проанализировать зависимость от тренда.
     private final TrendService trendService;
     private final Account account;
     public State state = State.WAIT_IMBALANCE;
 
     public Strategy(ExchangeSimulator simulator,
-                    TreeMap<Long, Double> marketData,
+                    TreeMap<Long, MarketEntry> marketData,
                     ImbalanceService imbalanceService,
                     ExtremumService extremumService,
                     TrendService trendService,
@@ -52,14 +72,13 @@ public class Strategy implements Tickle {
         this.account = account;
     }
 
-    @Override
-    public void onTick(long time, double price) {
+    public void onTick(long time, MarketEntry marketEntry) {
 
-
-        //TODO: добавить комиссии биржи и добавить изменение стоп лосса с учетом комиссий.
+        //TODO(1) Отслеживать был ли взят имбаланс. Если нет -> брать принудительно если цена еще не сильно вернулась обратно.
         // Переписать имбаланс сервис так чтобы при поиске имбаланса использовались только минутные данные.
         // Основное время программа ищет имбаланс и нет нужды в секундных данных.
 
+        double price = (marketEntry.high() + marketEntry.low()) / 2.;
 
         switch (state) {
             case WAIT_IMBALANCE -> {
@@ -105,10 +124,10 @@ public class Strategy implements Tickle {
                     tp = imbalance.getEndPrice() + FIRST_TAKE_PROFIT_THRESHOLD * imbalanceSize;
                     sl = price - STOP_LOSS_THRESHOLD * imbalanceSize;
                 }
-                marketOrder1.setPrice(price);
+                marketOrder1.setExecutionPrice(price);
                 marketOrder1.setTP_SL(tp, sl);
                 marketOrder1.setCreateTime(time);
-                marketOrder1.setMoneyAmount(0.5 * account.calculatePositionSize());
+                marketOrder1.setMoneyAmount(0.6 * account.calculatePositionSize());
 
 
                 Order marketOrder2 = new Order();
@@ -122,31 +141,12 @@ public class Strategy implements Tickle {
                     tp = imbalance.getEndPrice() + SECOND_TAKE_PROFIT_THRESHOLD * imbalanceSize;
                     sl = price - STOP_LOSS_THRESHOLD * imbalanceSize;
                 }
-                marketOrder2.setPrice(price);
                 marketOrder2.setTP_SL(tp, sl);
                 marketOrder2.setCreateTime(time);
-                marketOrder2.setMoneyAmount(0.25 * account.calculatePositionSize());
+                marketOrder2.setMoneyAmount(0.4 * account.calculatePositionSize());
 
-
-                Order marketOrder3 = new Order();
-                marketOrder3.setExecutionType(ExecutionType.MARKET);
-                if (imbalance.getType() == Imbalance.Type.UP) {
-                    marketOrder3.setType(OrderType.SHORT);
-                    tp = imbalance.getEndPrice() - THIRD_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price + STOP_LOSS_THRESHOLD * imbalanceSize;
-                } else {
-                    marketOrder3.setType(OrderType.LONG);
-                    tp = imbalance.getEndPrice() + THIRD_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price - STOP_LOSS_THRESHOLD * imbalanceSize;
-                }
-                marketOrder3.setPrice(price);
-                marketOrder3.setTP_SL(tp, sl);
-                marketOrder3.setCreateTime(time);
-                marketOrder3.setMoneyAmount(0.25 * account.calculatePositionSize());
-
-                simulator.submitOrder(marketOrder1, time);
-                simulator.submitOrder(marketOrder2, time);
-                simulator.submitOrder(marketOrder3, time);
+                simulator.submitOrder(marketOrder1, time, price);
+                simulator.submitOrder(marketOrder2, time, price);
 
                 state = State.POSITIONS_OPENED;
             }
@@ -164,10 +164,10 @@ public class Strategy implements Tickle {
                     state = State.ENTRY_POINT_SEARCH;
                 }
 
-                if (positions.size() == 3) {
+                if (positions.size() == 2) {
                     positions.forEach(position -> {
-                        if (position.getProfitLoss() * account.getCredit() > position.getOpenCommission() * 3) {
-                            setZeroLoss(position);
+                        if (position.getProfitLoss() > (position.getOpenFee() + position.getCloseFee()) * 1.2) {
+                            position.setZeroLoss();
                         }
                     });
                 }
@@ -178,40 +178,10 @@ public class Strategy implements Tickle {
             }
             case WAIT_POSITIONS_CLOSED -> {
                 List<Position> positions = simulator.getOpenPositions();
-                if (positions.size() == 2 || positions.size() == 1) {
-                    simulator.getLastClosedPosition().ifPresent(lastClosedPosition -> {
-                        positions.forEach(position -> {
-                            switch (position.getOrder().getType()) {
-                                case LONG -> {
-                                    position.setStopLoss(lastClosedPosition.getClosePrice() -
-                                            0.1 * (position.getOpenPrice() - lastClosedPosition.getClosePrice()));
-                                }
-                                case SHORT -> {
-                                    position.setStopLoss(lastClosedPosition.getClosePrice() +
-                                            0.1 * (position.getOpenPrice() - lastClosedPosition.getClosePrice()));
-                                }
-                            }
-                        });
-                    });
-                }
-
                 if (positions.isEmpty()) {
                     state = State.WAIT_IMBALANCE;
                 }
             }
-        }
-    }
-
-    private void setZeroLoss(Position position) {
-
-        // LONG: profitLoss = (closePrice - openPrice) * amount * credit and must be > twoEmission ->
-        //       closePrice - openPrice > twoEmission / (amount * credit)
-        //       closePrice > openPrice + twoEmission / (amount * credit)
-        // SHORT: same, but   openPrice - twoEmission / (amount * credit)
-        double twoEmissionProfitPrice = (position.getOpenCommission() * 2) / (position.getAmount() * account.getCredit());
-        switch (position.getOrder().getType()) {
-            case LONG -> position.setStopLoss(position.getOpenPrice() + twoEmissionProfitPrice);
-            case SHORT -> position.setStopLoss(position.getOpenPrice() - twoEmissionProfitPrice);
         }
     }
 }

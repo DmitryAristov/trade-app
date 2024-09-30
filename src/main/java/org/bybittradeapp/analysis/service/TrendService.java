@@ -1,7 +1,6 @@
 package org.bybittradeapp.analysis.service;
 
-import java.util.TreeMap;
-
+//TODO(2) написать сервис определения тренда
 public class TrendService {
     public enum Trend { UP, NEUTRAL, DOWN }
 
@@ -12,7 +11,6 @@ public class TrendService {
     }
 
     public Trend getTrend(int fromElement) {
-        //TODO
         return Trend.NEUTRAL;
     }
 }

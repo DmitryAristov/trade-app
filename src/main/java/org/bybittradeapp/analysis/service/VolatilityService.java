@@ -8,7 +8,9 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import org.bybittradeapp.marketdata.domain.MarketKlineEntry;
+import kotlin.Pair;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.Serializer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -18,31 +20,41 @@ import static org.bybittradeapp.Main.*;
 
 public class VolatilityService {
 
+    private final Serializer<Pair<Double, Double>> serializer;
     private double volatility = 0;
     private double average = 0;
 
     /**
-     * Method returns volatility of provided marked data in percents
+     * Метод определяет волатильность и среднюю цену актива
      */
     public VolatilityService() {
-        List<MarketKlineEntry> marketData = getDailyMarketData();
+        this.serializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/volatility-data/");
+        Pair<Double, Double> volData = serializer.deserialize();
+        if (SKIP_MARKET_DATA_UPDATE && volData != null && volData.getFirst() != 0. && volData.getSecond() != 0.) {
+            volatility = volData.getFirst();
+            average = volData.getSecond();
+            return;
+        }
+
+        List<MarketEntry> marketData = getDailyMarketData();
         if (marketData == null || marketData.size() < 2) {
             return;
         }
 
         double sum = 0;
         List<Double> changes = new ArrayList<>();
-        for (MarketKlineEntry marketDatum : marketData) {
-            double priceDiff = marketDatum.getHighPrice() - marketDatum.getLowPrice();
-            double priceAverage = (marketDatum.getHighPrice() + marketDatum.getLowPrice()) / 2.;
+        for (MarketEntry marketDatum : marketData) {
+            double priceDiff = marketDatum.high() - marketDatum.low();
+            double priceAverage = (marketDatum.high() + marketDatum.low()) / 2.;
             sum += priceAverage;
             changes.add(priceDiff / priceAverage);
         }
         this.volatility = changes.stream().reduce(0., Double::sum) / changes.size();
         this.average = sum / marketData.size();
+        serializer.serialize(new Pair<>(volatility, average));
     }
 
-    private List<MarketKlineEntry> getDailyMarketData() {
+    private List<MarketEntry> getDailyMarketData() {
 
         BybitApiMarketRestClient client = BybitApiClientFactory
                 .newInstance(BybitApiConfig.MAINNET_DOMAIN, false)
@@ -63,20 +75,14 @@ public class VolatilityService {
 
         return marketKlineResult.getMarketKlineEntries()
                 .stream()
-                .map(this::toMarketKlineEntry)
+                .map(this::toMarketEntry)
                 .toList();
 
     }
 
     @NotNull
-    private MarketKlineEntry toMarketKlineEntry(@NotNull com.bybit.api.client.domain.market.response.kline.MarketKlineEntry entry) {
-        MarketKlineEntry result = new MarketKlineEntry();
-        result.setStartTime(entry.getStartTime());
-        result.setOpenPrice(Double.parseDouble(entry.getOpenPrice()));
-        result.setClosePrice(Double.parseDouble(entry.getClosePrice()));
-        result.setHighPrice(Double.parseDouble(entry.getHighPrice()));
-        result.setLowPrice(Double.parseDouble(entry.getLowPrice()));
-        return result;
+    private MarketEntry toMarketEntry(@NotNull com.bybit.api.client.domain.market.response.kline.MarketKlineEntry entry) {
+        return new MarketEntry(Double.parseDouble(entry.getHighPrice()), Double.parseDouble(entry.getLowPrice()));
     }
 
     public double getVolatility() {

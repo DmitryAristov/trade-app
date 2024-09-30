@@ -1,8 +1,11 @@
-package org.bybittradeapp.marketdata.domain;
+package org.bybittradeapp.ui.domain;
 
 import java.io.Serializable;
 import java.time.Instant;
 
+/**
+ * Для отображения в UI в виде "свечей"
+ */
 public class MarketKlineEntry implements Serializable {
     private long startTime;
     private double highPrice;
