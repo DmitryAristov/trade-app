@@ -3,27 +3,31 @@ package org.bybittradeapp;
 import com.bybit.api.client.domain.market.MarketInterval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bybittradeapp.analysis.Analyser;
+import org.bybittradeapp.analysis.service.VolatilityService;
 import org.bybittradeapp.backtest.BackTester;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.marketdata.service.MarketDataLoader;
 import org.bybittradeapp.marketdata.service.ExchangeRequestService;
 import org.bybittradeapp.ui.domain.MarketKlineEntry;
+import org.bybittradeapp.ui.utils.JsonUtils;
 import org.bybittradeapp.ui.utils.Serializer;
 
 import java.util.TreeMap;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class Main {
     public static final ObjectMapper mapper = new ObjectMapper();
 
 
-    public static final int HISTORICAL_DATA_SIZE = 30;
+    public static final int HISTORICAL_DATA_SIZE = 360;
     public static final String SYMBOL = "BTCUSDT";
 
     /**
      * Офлайн мод. Если не нужно обновлять рыночные данные и UI данные или если нет сети.
      */
     public static final boolean SKIP_MARKET_DATA_UPDATE = true;
-    public static final MarketInterval UI_DATA_INTERVAL = MarketInterval.FIVE_MINUTES;
+    public static final MarketInterval UI_DATA_INTERVAL = MarketInterval.HALF_HOURLY;
 
 
     private static final MarketDataLoader<TreeMap<Long, MarketKlineEntry>> uiMarketDataLoader = new MarketDataLoader<>(
@@ -36,12 +40,12 @@ public class Main {
             ExchangeRequestService::performBinanceMarketDataRequest);
 
 
-    private static final BackTester tester = new BackTester(analyseMarketDataLoader.getData(), uiMarketDataLoader.getData());
+//    private static final BackTester tester = new BackTester(analyseMarketDataLoader.getData(), uiMarketDataLoader.getData());
     private static final Analyser analyser = new Analyser(analyseMarketDataLoader.getData(), uiMarketDataLoader.getData());
 
 
     public static void main(String[] args) {
         analyser.runAnalysis();
-        tester.runTests();
+//        tester.runTests();
     }
 }

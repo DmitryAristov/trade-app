@@ -8,9 +8,8 @@ import com.bybit.api.client.domain.market.request.MarketDataRequest;
 import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
-import kotlin.Pair;
+import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
-import org.bybittradeapp.ui.utils.Serializer;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -20,41 +19,66 @@ import static org.bybittradeapp.Main.*;
 
 public class VolatilityService {
 
-    private final Serializer<Pair<Double, Double>> serializer;
-    private double volatility = 0;
-    private double average = 0;
+    /**
+     * Период обновления волатильности и средней цены (1000мс * 60с * 60м * 24ч = 1 день)
+     */
+    private static final long UPDATE_TIME_PERIOD_MILLS = 24L * 60L * 60L * 1000L;
+    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 5;
+    private static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 5;
+
+    private long lastUpdateTime = -1L;
+    private List<MarketEntry> marketData = new ArrayList<>();
+
+    private final List<VolatilityListener> listeners = new ArrayList<>();
+
+    public VolatilityService() {  }
+
+    public void onTick(long currentTime, MarketEntry currentEntry) {
+        if (currentTime - lastUpdateTime > UPDATE_TIME_PERIOD_MILLS) {
+            marketData = getDailyMarketData(currentTime - VOLATILITY_CALCULATE_DAYS_COUNT * 24L * 60L * 60L * 1000L);
+            double volatility = calculateVolatility();
+            double average = calculateAverage();
+            Log.log(String.format("calculated new volatility=%.2f%% and average=%.2f$", volatility * 100., average));
+            listeners.forEach(listener -> listener.notify(volatility, average));
+            lastUpdateTime = currentTime;
+        }
+    }
 
     /**
-     * Метод определяет волатильность и среднюю цену актива
+     * Метод определяет волатильность актива
      */
-    public VolatilityService() {
-        this.serializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/volatility-data/");
-        Pair<Double, Double> volData = serializer.deserialize();
-        if (SKIP_MARKET_DATA_UPDATE && volData != null && volData.getFirst() != 0. && volData.getSecond() != 0.) {
-            volatility = volData.getFirst();
-            average = volData.getSecond();
-            return;
-        }
-
-        List<MarketEntry> marketData = getDailyMarketData();
+    private double calculateVolatility() {
         if (marketData == null || marketData.size() < 2) {
-            return;
+            return 0.;
         }
 
-        double sum = 0;
         List<Double> changes = new ArrayList<>();
         for (MarketEntry marketDatum : marketData) {
             double priceDiff = marketDatum.high() - marketDatum.low();
             double priceAverage = (marketDatum.high() + marketDatum.low()) / 2.;
-            sum += priceAverage;
             changes.add(priceDiff / priceAverage);
         }
-        this.volatility = changes.stream().reduce(0., Double::sum) / changes.size();
-        this.average = sum / marketData.size();
-        serializer.serialize(new Pair<>(volatility, average));
+        return changes.stream().reduce(0., Double::sum) / changes.size();
     }
 
-    private List<MarketEntry> getDailyMarketData() {
+    /**
+     * Метод определяет среднюю цену актива
+     */
+    private double calculateAverage() {
+        if (marketData == null || marketData.size() < 2) {
+            return 0.;
+        }
+        var subMarketData = marketData.subList(Math.max(marketData.size() - AVERAGE_PRICE_CALCULATE_DAYS_COUNT, 0), marketData.size());
+
+        double sum = 0;
+        for (MarketEntry marketDatum : subMarketData) {
+            double priceAverage = (marketDatum.high() + marketDatum.low()) / 2.;
+            sum += priceAverage;
+        }
+        return sum / subMarketData.size();
+    }
+
+    private List<MarketEntry> getDailyMarketData(long start) {
 
         BybitApiMarketRestClient client = BybitApiClientFactory
                 .newInstance(BybitApiConfig.MAINNET_DOMAIN, false)
@@ -64,8 +88,9 @@ public class VolatilityService {
         MarketDataRequest marketKLineRequest = MarketDataRequest.builder()
                 .category(CategoryType.LINEAR)
                 .symbol(SYMBOL)
+                .start(start)
                 .marketInterval(MarketInterval.DAILY)
-                .limit(HISTORICAL_DATA_SIZE)
+                .limit(VOLATILITY_CALCULATE_DAYS_COUNT)
                 .build();
 
         // get response
@@ -85,11 +110,17 @@ public class VolatilityService {
         return new MarketEntry(Double.parseDouble(entry.getHighPrice()), Double.parseDouble(entry.getLowPrice()));
     }
 
-    public double getVolatility() {
-        return volatility;
+    public void subscribe(VolatilityListener listener) {
+        if (!listeners.contains(listener)) {
+            listeners.add(listener);
+        }
     }
 
-    public double getAverage() {
-        return average;
+    public void subscribeAll(List<VolatilityListener> listeners_) {
+        listeners_.forEach(this::subscribe);
+    }
+
+    public void unsubscribe(VolatilityListener listener) {
+        listeners.remove(listener);
     }
 }

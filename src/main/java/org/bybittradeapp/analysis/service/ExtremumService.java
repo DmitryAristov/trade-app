@@ -18,35 +18,27 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-public class ExtremumService {
+public class ExtremumService implements VolatilityListener {
     public static final long MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW = 10L * 60L * 60L * 1000L;
     public static final long MIN_MAX_SEARCH_ON_MA_TIME_WINDOW = 100L * 60L * 1000L ;
     public static final long SEARCH_TIME_WINDOW = 60L * 24L * 60L * 60L * 1000L; // 60 seconds * 60 minutes * 24 hours * 60 days
     public static final double MIN_DIFF_BETWEEN_EXTREMUMS = 0.1;
 
-    private final long initialMaTimeWindow;
-    private final double minPriceDiff;
+    private long initialMaTimeWindow;
+    private double minPriceDiff;
     private TreeMap<Long, MarketEntry> data;
-    private final TreeMap<Long, MarketEntry> marketData;
 
-    public ExtremumService(TreeMap<Long, MarketEntry> marketData, VolatilityService volatilityService) {
-        this.marketData = marketData;
-        this.initialMaTimeWindow = Math.round(volatilityService.getVolatility() * 120L * 60L * 1000L);
-        this.minPriceDiff = volatilityService.getVolatility() * volatilityService.getAverage() * MIN_DIFF_BETWEEN_EXTREMUMS;
-    }
+    public ExtremumService() {  }
 
     public void onTick(long time, MarketEntry marketEntry) {
-        //TODO(2) Переписать чтобы экстремумы обновлялись каждый тик
-//        updateData(time, price);
+        //TODO перейти на минутный лист
+//        updateData(time, marketEntry);
     }
 
     private void updateData(long time, MarketEntry marketEntry) {
-        // All market data. Need to filter SEARCH_TIME_WINDOW values only
-        if (data == null) {
-            data = new TreeMap<>(marketData.subMap(time - SEARCH_TIME_WINDOW, true, time, true));
-        } else {
-            data.put(time, marketEntry);
-            data.entrySet().removeIf(entry -> time - entry.getKey() > SEARCH_TIME_WINDOW);
+        data.put(time, marketEntry);
+        if (time - data.lastKey() > SEARCH_TIME_WINDOW) {
+            data.pollFirstEntry();
         }
     }
 
@@ -60,20 +52,20 @@ public class ExtremumService {
          * but they all have wrong timestamp. Tio fix it, we need to map founded extremums on lower MAs
          * with several steps.
          */
-        TreeMap<Long, Double> average = movingAverage(marketData, initialMaTimeWindow);
+        TreeMap<Long, Double> average = movingAverage(data, initialMaTimeWindow);
         List<Extremum> extremums = findExtremums(average);
         Log.log("initially found " + extremums.size() + " extremums");
 
         final long secondCount = Math.round(initialMaTimeWindow * 0.8);
-        List<Extremum> extremums500 = mapExtremumsToNewMa(marketData, extremums, secondCount);
+        List<Extremum> extremums500 = mapExtremumsToNewMa(data, extremums, secondCount);
         final long thirdCount = Math.round(initialMaTimeWindow * 0.6);
-        List<Extremum> extremums400 = mapExtremumsToNewMa(marketData, extremums500, thirdCount);
+        List<Extremum> extremums400 = mapExtremumsToNewMa(data, extremums500, thirdCount);
         final long foursCount = Math.round(initialMaTimeWindow * 0.4);
-        List<Extremum> extremums300 = mapExtremumsToNewMa(marketData, extremums400, foursCount);
+        List<Extremum> extremums300 = mapExtremumsToNewMa(data, extremums400, foursCount);
         final long fifthCount = Math.round(initialMaTimeWindow * 0.25);
-        List<Extremum> extremums200 = mapExtremumsToNewMa(marketData, extremums300, fifthCount);
+        List<Extremum> extremums200 = mapExtremumsToNewMa(data, extremums300, fifthCount);
         final long sixthCount = Math.round(initialMaTimeWindow * 0.15);
-        List<Extremum> extremums100 = mapExtremumsToNewMa(marketData, extremums200, sixthCount);
+        List<Extremum> extremums100 = mapExtremumsToNewMa(data, extremums200, sixthCount);
         Log.log("after all mappings we have " + extremums100.size() + " extremums");
 
         Set<Extremum> extrema = new HashSet<>();
@@ -84,11 +76,11 @@ public class ExtremumService {
          */
         extremums100.stream()
                 .filter(Objects::nonNull)
-                .forEach(extremum -> marketData.entrySet().stream()
+                .forEach(extremum -> data.entrySet().stream()
                         .min(Comparator.comparing(entry -> entry.getKey() == extremum.getTimestamp()))
                         .ifPresent(entry -> {
                             if (extremum.getType() == Extremum.Type.MAX) {
-                                Map.Entry<Long, MarketEntry> max = marketData.entrySet().stream()
+                                Map.Entry<Long, MarketEntry> max = data.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
                                         .max(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
@@ -97,7 +89,7 @@ public class ExtremumService {
                                 extrema.add(new Extremum(max.getKey(), (max.getValue().high() + max.getValue().high()) / 2., Extremum.Type.MAX));
                             }
                             if (extremum.getType() == Extremum.Type.MIN) {
-                                Map.Entry<Long, MarketEntry> min = marketData.entrySet().stream()
+                                Map.Entry<Long, MarketEntry> min = data.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
                                         .min(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
@@ -115,11 +107,11 @@ public class ExtremumService {
         Log.log("start filtering...");
         do {
             removeSeveralOneTypeExtremums(result);
-            removeMinHigherThanMax(marketData, result);
+            removeMinHigherThanMax(data, result);
             removeExtremumsByPriceThreshold(result);
         } while (extremaAreNotCorrect(result));
 
-        correctExtremumsIfThereOneIsBetween(marketData, result);
+        correctExtremumsIfThereOneIsBetween(data, result);
         Log.log("found " + extrema.size() + " extremums");
 
         return result;
@@ -422,5 +414,11 @@ public class ExtremumService {
             }
         }
         return false;
+    }
+
+    @Override
+    public void notify(double volatility, double average) {
+        this.initialMaTimeWindow = Math.round(volatility * 120L * 60L * 1000L);
+        this.minPriceDiff = volatility * average * MIN_DIFF_BETWEEN_EXTREMUMS;
     }
 }

@@ -24,6 +24,14 @@ public class Imbalance implements Serializable {
         this.type = startPrice - endPrice > 0 ? Type.DOWN : Type.UP;
     }
 
+    public Imbalance(long startTime, double startPrice, long endTime, double endPrice, Type type) {
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.startPrice = startPrice;
+        this.endPrice = endPrice;
+        this.type = type;
+    }
+
     public Imbalance() {  }
 
     public Type getType() {

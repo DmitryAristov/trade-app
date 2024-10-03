@@ -1,9 +1,7 @@
 package org.bybittradeapp.analysis;
 
-import org.bybittradeapp.analysis.service.ExtremumService;
-import org.bybittradeapp.analysis.service.ImbalanceService;
-import org.bybittradeapp.analysis.service.TrendService;
-import org.bybittradeapp.analysis.service.VolatilityService;
+import org.bybittradeapp.analysis.domain.Imbalance;
+import org.bybittradeapp.analysis.service.*;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.ui.domain.MarketKlineEntry;
@@ -11,11 +9,13 @@ import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.bybittradeapp.logging.Log.logProgress;
-import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketData;
 
 /**
  * Класс для анализа работы технических инструментов
@@ -32,10 +32,11 @@ public class Analyser {
         this.marketData = marketData;
         this.uiMarketData = uiMarketData;
         this.volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService(volatilityService);
-        this.trendService = new TrendService(volatilityService);
-        this.extremumService = new ExtremumService(marketData, volatilityService);
-        updateMarketData(uiMarketData);
+        this.imbalanceService = new ImbalanceService();
+        this.trendService = new TrendService();
+        this.extremumService = new ExtremumService();
+
+        volatilityService.subscribeAll(List.of(this.imbalanceService, this.extremumService, this.trendService));
     }
 
     public void runAnalysis() {
@@ -43,26 +44,49 @@ public class Analyser {
         long startTime = Instant.now().toEpochMilli();
         long firstKey = marketData.firstKey();
         long lastKey = marketData.lastKey();
-//        long firstKey = 1722816000000L;
-//        long lastKey = 1722938400000L;
 
         Log.log("starting analysis of technical instruments");
-        marketData
-//                .subMap(firstKey, lastKey)
-                .forEach((key, value) -> {
-                    imbalanceService.onTick(key, value);
+        marketData.forEach((key, marketEntry) -> {
+                    volatilityService.onTick(key, marketEntry);
+                    imbalanceService.onTick(key, marketEntry);
 
                     double progress = ((double) (key - firstKey)) / ((double) (lastKey - firstKey));
                     logProgress(startTime, step, progress, "analysis");
                 });
         Log.log("analysis of technical instruments finished");
 
-//        var uiMarketDataFiltered = uiMarketData.stream()
-//                .filter(entry -> entry.getStartTime() >= firstKey - 5 * 60 * 1000L && entry.getStartTime() <= lastKey + 5 * 60 * 1000L)
-//                .collect(Collectors.toList());
-//        JsonUtils.updateMarketData(uiMarketDataFiltered);
-
-        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketData);
+//        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>());
+
+        imbalanceService.getImbalances().forEach(imbalance -> {
+            updateUiData(imbalance);
+            System.out.println(imbalance);
+        });
+    }
+
+    private void updateUiData(Imbalance imbalance) {
+        var timeDelay = 1000L * 60L * 60L;
+        var secondsMarketKLineEntries = marketData
+                .subMap(imbalance.getStartTime() - timeDelay, imbalance.getCompleteTime() + timeDelay)
+                .entrySet()
+                .stream()
+                .map(entry -> {
+                    var uiEntry = new MarketKlineEntry();
+                    uiEntry.setStartTime(entry.getKey());
+                    uiEntry.setLowPrice(entry.getValue().low());
+                    uiEntry.setHighPrice(entry.getValue().high());
+                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    return uiEntry;
+                })
+                .collect(Collectors.toMap(
+                        MarketKlineEntry::getStartTime,
+                        Function.identity(),
+                        (first, second) -> first,
+                        TreeMap::new
+                ));
+
+        JsonUtils.updateMarketData(secondsMarketKLineEntries);
+        JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), new ArrayList<>(), secondsMarketKLineEntries);
     }
 }

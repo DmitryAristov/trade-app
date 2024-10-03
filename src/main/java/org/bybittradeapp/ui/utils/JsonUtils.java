@@ -26,8 +26,8 @@ public class JsonUtils {
     public static final String DATA_JSON_FILE_PATH = "/home/dmitriy/Projects/trading-vue-js/data/data.json";
     public static final long ZONE_DELAY_MILLS = 10800000L;
 
-    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/positions");
-    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances");
+    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/positions/");
+    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances/");
     private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/extremums/");
 
     public static void updateMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
@@ -37,7 +37,7 @@ public class JsonUtils {
         final ArrayNode ohlcv = mapper.createArrayNode();
         uiMarketData.forEach((key, value) -> {
             ArrayNode entryNode = mapper.createArrayNode();
-            entryNode.add(value.getStartTime() + ZONE_DELAY_MILLS);
+            entryNode.add(value.getStartTime());
             entryNode.add(value.getOpenPrice());
             entryNode.add(value.getHighPrice());
             entryNode.add(value.getLowPrice());
@@ -113,17 +113,17 @@ public class JsonUtils {
         for (Imbalance imbalance : imbalances) {
             Optional<Long> startTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime_ -> startTime_ < imbalance.getStartTime() + ZONE_DELAY_MILLS)
+                    .filter(startTime_ -> startTime_ < imbalance.getStartTime())
                     .max(Comparator.comparing(Long::longValue));
 
             Optional<Long> endTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(endTime_ -> endTime_ > imbalance.getEndTime() + ZONE_DELAY_MILLS)
+                    .filter(endTime_ -> endTime_ > imbalance.getEndTime())
                     .min(Comparator.comparing(Long::longValue));
 
             Optional<Long> completeTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime() + ZONE_DELAY_MILLS)
+                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime())
                     .min(Comparator.comparing(Long::longValue));
 
             if (startTime.isEmpty() || endTime.isEmpty() || completeTime.isEmpty()) {

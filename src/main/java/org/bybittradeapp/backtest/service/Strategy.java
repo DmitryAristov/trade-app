@@ -10,10 +10,8 @@ import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
 import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
-import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -87,7 +85,7 @@ public class Strategy {
                  *    yes - change state to ENTRY_POINT_SEARCH
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getState() == ImbalanceState.IMBALANCE_IN_PROGRESS) {
+                if (imbalanceService.getCurrentState() == ImbalanceState.PROGRESS) {
                     state = State.ENTRY_POINT_SEARCH;
                 }
             }
@@ -97,7 +95,7 @@ public class Strategy {
                  *    yes - change state to POSSIBLE_ENTRY_POINT
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getState() == ImbalanceState.POTENTIAL_END_POINT_FOUND) {
+                if (imbalanceService.getCurrentState() == ImbalanceState.POTENTIAL_END_POINT) {
                     state = State.POSSIBLE_ENTRY_POINT;
                 }
             }

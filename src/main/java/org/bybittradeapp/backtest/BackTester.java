@@ -14,6 +14,7 @@ import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -24,26 +25,32 @@ import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketData;
  * Для тестирования стратегии на предыдущих исторических данных.
  */
 public class BackTester {
-    private final Strategy strategy;
-    private final TreeMap<Long, MarketEntry> marketData;
     private final ExchangeSimulator simulator;
-    private final ImbalanceService imbalanceService;
+    private final Strategy strategy;
     private final Account account;
+
+    private final TreeMap<Long, MarketEntry> marketData;
     private final TreeMap<Long, MarketKlineEntry> uiMarketData;
 
+    private final VolatilityService volatilityService;
+    private final ImbalanceService imbalanceService;
+    private final TrendService trendService;
+    private final ExtremumService extremumService;
 
     public BackTester(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
         this.uiMarketData = uiMarketData;
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
-        VolatilityService volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService(volatilityService);
+        this.volatilityService = new VolatilityService();
+        this.imbalanceService = new ImbalanceService();
+        this.trendService = new TrendService();
+        this.extremumService = new ExtremumService();
 
-        TrendService trendService = new TrendService(volatilityService);
-        ExtremumService extremumService = new ExtremumService(marketData, volatilityService);
+        volatilityService.subscribeAll(List.of(this.imbalanceService, this.extremumService, this.trendService));
+
         this.strategy = new Strategy(simulator, marketData, imbalanceService, extremumService, trendService, account);
-        updateMarketData(uiMarketData);
+//        updateMarketData(uiMarketData);
     }
 
     public void runTests() {
@@ -57,10 +64,11 @@ public class BackTester {
         Log.log(String.format("starting backtest with balance %.2f$", account.getBalance()));
         marketData
 //                .subMap(firstKey, lastKey)
-                .forEach((key, value) -> {
-                    imbalanceService.onTick(key, value);
-                    strategy.onTick(key, value);
-                    simulator.onTick(key, value);
+                .forEach((key, marketEntry) -> {
+                    volatilityService.onTick(key, marketEntry);
+                    imbalanceService.onTick(key, marketEntry);
+                    strategy.onTick(key, marketEntry);
+                    simulator.onTick(key, marketEntry);
 
                     double progress = ((double) (key - firstKey)) / ((double) (lastKey - firstKey));
                     logProgress(startTime, step, progress, "backtest");

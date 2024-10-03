@@ -1,16 +1,18 @@
 package org.bybittradeapp.analysis.service;
 
 //TODO(2) написать сервис определения тренда
-public class TrendService {
-    public enum Trend { UP, NEUTRAL, DOWN }
+public class TrendService implements VolatilityListener {
 
-    private final VolatilityService volatilityService;
+    public enum Trend { UP, NEUTRAL, DOWN;}
 
-    public TrendService(VolatilityService volatilityService) {
-        this.volatilityService = volatilityService;
-    }
+    public TrendService() {  }
 
     public Trend getTrend(int fromElement) {
         return Trend.NEUTRAL;
+    }
+
+    @Override
+    public void notify(double volatility, double average) {
+
     }
 }
