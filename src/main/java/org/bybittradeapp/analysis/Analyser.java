@@ -32,7 +32,7 @@ public class Analyser {
         this.marketData = marketData;
         this.uiMarketData = uiMarketData;
         this.volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService();
+        this.imbalanceService = new ImbalanceService(marketData);
         this.trendService = new TrendService();
         this.extremumService = new ExtremumService();
 
@@ -55,38 +55,8 @@ public class Analyser {
                 });
         Log.log("analysis of technical instruments finished");
 
-//        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketData);
+        JsonUtils.updateMarketData(uiMarketData);
+        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>());
-
-        imbalanceService.getImbalances().forEach(imbalance -> {
-            updateUiData(imbalance);
-            System.out.println(imbalance);
-        });
-    }
-
-    private void updateUiData(Imbalance imbalance) {
-        var timeDelay = 1000L * 60L * 60L;
-        var secondsMarketKLineEntries = marketData
-                .subMap(imbalance.getStartTime() - timeDelay, imbalance.getCompleteTime() + timeDelay)
-                .entrySet()
-                .stream()
-                .map(entry -> {
-                    var uiEntry = new MarketKlineEntry();
-                    uiEntry.setStartTime(entry.getKey());
-                    uiEntry.setLowPrice(entry.getValue().low());
-                    uiEntry.setHighPrice(entry.getValue().high());
-                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
-                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
-                    return uiEntry;
-                })
-                .collect(Collectors.toMap(
-                        MarketKlineEntry::getStartTime,
-                        Function.identity(),
-                        (first, second) -> first,
-                        TreeMap::new
-                ));
-
-        JsonUtils.updateMarketData(secondsMarketKLineEntries);
-        JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), new ArrayList<>(), secondsMarketKLineEntries);
     }
 }

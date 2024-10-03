@@ -3,18 +3,13 @@ package org.bybittradeapp;
 import com.bybit.api.client.domain.market.MarketInterval;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.bybittradeapp.analysis.Analyser;
-import org.bybittradeapp.analysis.service.VolatilityService;
-import org.bybittradeapp.backtest.BackTester;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.marketdata.service.MarketDataLoader;
 import org.bybittradeapp.marketdata.service.ExchangeRequestService;
 import org.bybittradeapp.ui.domain.MarketKlineEntry;
-import org.bybittradeapp.ui.utils.JsonUtils;
 import org.bybittradeapp.ui.utils.Serializer;
 
 import java.util.TreeMap;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 public class Main {
     public static final ObjectMapper mapper = new ObjectMapper();

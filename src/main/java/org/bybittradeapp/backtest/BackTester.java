@@ -43,7 +43,7 @@ public class BackTester {
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService();
+        this.imbalanceService = new ImbalanceService(null);
         this.trendService = new TrendService();
         this.extremumService = new ExtremumService();
 

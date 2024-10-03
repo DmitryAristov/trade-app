@@ -4,31 +4,35 @@ import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.domain.MarketKlineEntry;
+import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 public class ImbalanceService implements VolatilityListener {
 
     /**
-     * Время хранения ежесекундных данных (1000мс * 60с * 60м * 2ч = 2 часа)
+     * Время хранения ежесекундных данных (1000мс * 60с * 60м * 3ч = 3 часа)
      */
-    private static final long SECONDS_DATA_LIVE_TIME = 7200_000L;
+    private static final long SECONDS_DATA_LIVE_TIME = 10800_000L;
 
     /**
-     * Время хранения ежеминутных данных (1000мс * 60с * 60м * 2ч = 2 часа)
+     * Время хранения ежеминутных данных (1000мс * 60с * 60м * 3ч = 3 часа)
      */
-    private static final long MINUTES_DATA_LIVE_TIME = 7200_000L;
+    private static final long MINUTES_DATA_LIVE_TIME = 10800_000L;
 
     /**
-     * Время за которое если не появилось нового минимума то считаем имбаланс завершенным (1000мс * 60с * 15м = 15 минут)
+     * Время за которое если не появилось нового минимума то считаем имбаланс завершенным (1000мс * 60с = 1 минута)
      */
-    private static final long COMPLETE_TIME = 900_000L;
+    private static final long COMPLETE_TIME = 60_000L;
 
     /**
-     * Время в течение которого после завершения предыдущего имбаланса не ищется новый (1000мс * 60с * 60м = 1 час)
+     * Время в течение которого после завершения предыдущего имбаланса не ищется новый (1000мс * 60с * 5м = 5 минут)
      */
-    private static final long PREVENT_TRACK_IMBALANCE_TIME = 3600_000L;
+    private static final long PREVENT_TRACK_IMBALANCE_TIME = 300_000L;
 
 
     /**
@@ -55,13 +59,14 @@ public class ImbalanceService implements VolatilityListener {
     private final LinkedList<Imbalance> imbalances = new LinkedList<>();
 
 
-    public ImbalanceService() {  }
+    public ImbalanceService(TreeMap<Long, MarketEntry> marketData) {
+        this.marketData = marketData;
+    }
 
     public void onTick(long currentTime, MarketEntry marketEntry) {
         updateData(currentTime, marketEntry);
         switch (currentState) {
             case WAIT -> detectImbalance(currentTime, marketEntry);
-            case STARTED -> determineImbalanceStart();
             case PROGRESS -> trackImbalanceProgress(currentTime, marketEntry);
             case POTENTIAL_END_POINT -> evaluatePossibleEndPoint(currentTime, marketEntry);
             case COMPLETED -> resetImbalanceState();
@@ -108,13 +113,14 @@ public class ImbalanceService implements VolatilityListener {
                 // теперь нужно отследить его начало
                 if (priceChangeSpeed > speedThreshold) {
                     currentImbalance = new Imbalance(previousTime, previousEntry.low(), currentTime, currentEntry.high(), Imbalance.Type.UP);
-                    currentState = ImbalanceState.STARTED;
-                } else {
-                    // условие по минимальной скорости не выполнено
+                    correctImbalanceStart();
+                    correctImbalanceEnd();
+                    currentState = ImbalanceState.PROGRESS;
+                    Log.log("Imbalance started: " + currentImbalance);
                     return;
                 }
 
-            // если максимум за минуту из цикла меньше чем минимум за текущую секунду на минимальное изменение цены
+                // если максимум за минуту из цикла меньше чем минимум за текущую секунду на минимальное изменение цены
             //  -> потенциальный имбаланс вниз
             } else if (previousEntry.high() - currentEntry.low() > priceChangeThreshold) {
                 double priceChange = previousEntry.high() - currentEntry.low();
@@ -124,66 +130,122 @@ public class ImbalanceService implements VolatilityListener {
                 // теперь нужно отследить его начало
                 if (priceChangeSpeed > speedThreshold) {
                     currentImbalance = new Imbalance(previousTime, previousEntry.high(), currentTime, currentEntry.low(), Imbalance.Type.DOWN);
-                    currentState = ImbalanceState.STARTED;
-                } else {
-                    // условие по минимальной скорости не выполнено
+                    correctImbalanceStart();
+                    correctImbalanceEnd();
+                    currentState = ImbalanceState.PROGRESS;
+                    Log.log("Imbalance started: " + currentImbalance);
                     return;
                 }
             }
         }
     }
 
-    private void determineImbalanceStart() {
+    private void correctImbalanceStart() {
+        // сейчас времена начала и конца имбаланса - это времена из минутных данных
+        // нужно скорректировать эти цены на секундные данные
+        // для этого нужно сначала определить конкретную секунду начала имбаланса
+        // для этого берем секундные данные за минуту, что является началом имбаланса и ищем
+        // в этом списке startPrice
         long startSecond = switch (currentImbalance.getType()) {
-            case UP -> secondsData.subMap(currentImbalance.getStartTime() - 60000L, currentImbalance.getStartTime())
+            case UP -> secondsData.subMap(currentImbalance.getStartTime() - 60000L, true,
+                            currentImbalance.getStartTime(), true)
                     .entrySet()
                     .stream()
                     .filter(marketEntry -> marketEntry.getValue().low() == currentImbalance.getStartPrice())
                     .map(Map.Entry::getKey)
-                    .findFirst()
-                    .orElse(currentImbalance.getStartTime());
-            case DOWN -> secondsData.subMap(currentImbalance.getStartTime() - 60000L, currentImbalance.getStartTime())
+                    .max(Comparator.comparing(Long::longValue))
+                    .orElseThrow();
+            case DOWN -> secondsData.subMap(currentImbalance.getStartTime() - 60000L, true,
+                            currentImbalance.getStartTime(), true)
                     .entrySet()
                     .stream()
                     .filter(marketEntry -> marketEntry.getValue().high() == currentImbalance.getStartPrice())
                     .map(Map.Entry::getKey)
-                    .findFirst()
-                    .orElse(currentImbalance.getStartTime());
+                    .max(Comparator.comparing(Long::longValue))
+                    .orElseThrow();
         };
+        currentImbalance.setStartTime(startSecond);
 
-        SortedMap<Long, MarketEntry> descendingData = secondsData
+        // дальше берем секундные данные в обратном порядке (от большего времени к меньшему)
+        // и фильтруем только те, что были до старта имбаланса
+        SortedMap<Long, MarketEntry> descendingSecondsDataFromImbalanceStart = secondsData
                 .descendingMap()
-                .subMap(startSecond, secondsData.firstKey());
+                .subMap(currentImbalance.getStartTime(), true, secondsData.firstKey(), true);
 
-        double endPrice = currentImbalance.getEndPrice();
-        double endTime = currentImbalance.getEndTime();
+        // определяем текущую скорость роста или падения имбаланса
+        double currentSpeed = Math.abs(currentImbalance.getStartPrice() - currentImbalance.getEndPrice()) /
+                (currentImbalance.getEndTime() - currentImbalance.getStartTime());
 
+        // ищем начало имбаланса путем нахождения точки, до которой скорость роста или падения будет всегда меньше чем нам нужно
         switch (currentImbalance.getType()) {
             case UP -> {
-                for (long previousTime : descendingData.keySet()) {
-                    double previousPrice = descendingData.get(previousTime).low();
-                    double speed = (endPrice - previousPrice) / (endTime - previousTime);
-
-                    if (speed < speedThreshold * 0.75) {
-                        currentImbalance.setStartTime(previousTime);
-                        currentImbalance.setStartPrice(previousPrice);
-                        currentState = ImbalanceState.PROGRESS;
-                        Log.log("UP started: " + currentImbalance);
-                        return;
+                // сначала проходим всю секундную дату, чтобы найти максимально маленькое время,
+                // при котором скорость роста еще сохраняется
+                long possibleStartTime = currentImbalance.getStartTime();
+                for (long previousTime : descendingSecondsDataFromImbalanceStart.keySet()) {
+                    double previousPrice = descendingSecondsDataFromImbalanceStart.get(previousTime).low();
+                    double nextSpeed = (currentImbalance.getStartPrice() - previousPrice) /
+                            (previousTime - currentImbalance.getStartTime());
+                    if (nextSpeed > currentSpeed) {
+                        possibleStartTime = previousTime;
+                    }
+                }
+                // потом находим в образовавшемся промежутке минимум - он и является началом имбаланса
+                var secondsImbalanceSubMap = secondsData.subMap(possibleStartTime, true, currentImbalance.getEndTime(), true);
+                for (long time : secondsImbalanceSubMap.keySet()) {
+                    double price = secondsImbalanceSubMap.get(time).low();
+                    if (price < currentImbalance.getStartPrice()) {
+                        currentImbalance.setStartPrice(price);
+                        currentImbalance.setStartTime(time);
                     }
                 }
             }
             case DOWN -> {
-                for (long previousTime : descendingData.keySet()) {
-                    double previousPrice = descendingData.get(previousTime).high();
+                // сначала проходим всю секундную дату, чтобы найти максимально маленькое время,
+                // при котором скорость падения еще сохраняется
+                long possibleStartTime = currentImbalance.getStartTime();
+                for (long previousTime : descendingSecondsDataFromImbalanceStart.keySet()) {
+                    double previousPrice = descendingSecondsDataFromImbalanceStart.get(previousTime).high();
+                    double nextSpeed = (previousPrice - currentImbalance.getStartPrice()) /
+                            (currentImbalance.getStartTime() - previousTime);
+                    if (nextSpeed > currentSpeed) {
+                        possibleStartTime = previousTime;
+                    }
+                }
+                // потом находим в образовавшемся промежутке максимум - он и является началом имбаланса
+                var secondsImbalanceSubMap = secondsData.subMap(possibleStartTime, true, currentImbalance.getEndTime(), true);
+                for (long time : secondsImbalanceSubMap.keySet()) {
+                    double price = secondsImbalanceSubMap.get(time).high();
+                    if (price > currentImbalance.getStartPrice()) {
+                        currentImbalance.setStartPrice(price);
+                        currentImbalance.setStartTime(time);
+                    }
+                }
+            }
+        }
+    }
 
-                    double speed = (previousPrice - endPrice) / (endTime - previousTime);
-                    if (speed < speedThreshold * 0.75) {
-                        currentImbalance.setStartTime(previousTime);
-                        currentImbalance.setStartPrice(previousPrice);
-                        currentState = ImbalanceState.PROGRESS;
-                        Log.log("DOWN started: " + currentImbalance);
-                        return;
+    private void correctImbalanceEnd() {
+        // так как имбаланс был найден на минутных данных,
+        // время и цена его окончания возможно неправильные, нужно их скорректировать
+        // просто ищем максимум или минимум внутри имбаланса, если такие есть то это правильный конец
+        var secondsImbalanceSubMap = secondsData.subMap(currentImbalance.getStartTime(), true, currentImbalance.getEndTime(), true);
+        switch (currentImbalance.getType()) {
+            case UP -> {
+                for (long time : secondsImbalanceSubMap.keySet()) {
+                    double price = secondsImbalanceSubMap.get(time).high();
+                    if (price > currentImbalance.getEndPrice()) {
+                        currentImbalance.setEndPrice(price);
+                        currentImbalance.setEndTime(time);
+                    }
+                }
+            }
+            case DOWN -> {
+                for (long time : secondsImbalanceSubMap.keySet()) {
+                    double price = secondsImbalanceSubMap.get(time).low();
+                    if (price < currentImbalance.getEndPrice()) {
+                        currentImbalance.setEndPrice(price);
+                        currentImbalance.setEndTime(time);
                     }
                 }
             }
@@ -278,7 +340,7 @@ public class ImbalanceService implements VolatilityListener {
 
     private void resetImbalanceState() {
         imbalances.add(currentImbalance);
-
+        updateUiData(currentImbalance);
         currentImbalance = null;
         currentState = ImbalanceState.WAIT;
     }
@@ -291,7 +353,7 @@ public class ImbalanceService implements VolatilityListener {
     public void notify(double volatility, double average) {
         double averageDailyPriceChange = volatility * average;
         this.priceChangeThreshold = averageDailyPriceChange * 0.4; // ~500$
-        this.speedThreshold = averageDailyPriceChange * 0.02 / 60000.;
+        this.speedThreshold = averageDailyPriceChange * 0.1 / 60000.;
 
         Log.log("recalculated price change: " + priceChangeThreshold +
                 "$ and min speed: " + speedThreshold * 60000 * 60 + "$/hour");
@@ -303,5 +365,40 @@ public class ImbalanceService implements VolatilityListener {
 
     public Imbalance getCurrentImbalance() {
         return currentImbalance;
+    }
+
+
+
+
+    private final TreeMap<Long, MarketEntry> marketData;
+
+    private void updateUiData(Imbalance imbalance) {
+        var timeDelay = 1000L * 60L * 20L;
+        var secondsMarketKLineEntries = marketData
+                .subMap(imbalance.getStartTime() - timeDelay, imbalance.getEndTime() + timeDelay)
+                .entrySet()
+                .stream()
+                .map(entry -> {
+                    var uiEntry = new MarketKlineEntry();
+                    uiEntry.setStartTime(entry.getKey());
+                    uiEntry.setLowPrice(entry.getValue().low());
+                    uiEntry.setHighPrice(entry.getValue().high());
+                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    return uiEntry;
+                })
+                .collect(Collectors.toMap(
+                        MarketKlineEntry::getStartTime,
+                        Function.identity(),
+                        (first, second) -> first,
+                        TreeMap::new
+                ));
+
+        JsonUtils.updateMarketData(secondsMarketKLineEntries);
+
+        var tempMap = new TreeMap<>(secondsMarketKLineEntries);
+        tempMap.forEach((key, value) -> value.setStartTime(value.getStartTime() + JsonUtils.ZONE_DELAY_MILLS));
+
+        JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), new ArrayList<>(), tempMap);
     }
 }

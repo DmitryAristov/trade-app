@@ -23,11 +23,10 @@ public class VolatilityService {
      * Период обновления волатильности и средней цены (1000мс * 60с * 60м * 24ч = 1 день)
      */
     private static final long UPDATE_TIME_PERIOD_MILLS = 24L * 60L * 60L * 1000L;
-    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 5;
+    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 60;
     private static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 5;
 
     private long lastUpdateTime = -1L;
-    private List<MarketEntry> marketData = new ArrayList<>();
 
     private final List<VolatilityListener> listeners = new ArrayList<>();
 
@@ -35,9 +34,8 @@ public class VolatilityService {
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
         if (currentTime - lastUpdateTime > UPDATE_TIME_PERIOD_MILLS) {
-            marketData = getDailyMarketData(currentTime - VOLATILITY_CALCULATE_DAYS_COUNT * 24L * 60L * 60L * 1000L);
-            double volatility = calculateVolatility();
-            double average = calculateAverage();
+            double volatility = calculateVolatility(currentTime);
+            double average = calculateAverage(currentTime);
             Log.log(String.format("calculated new volatility=%.2f%% and average=%.2f$", volatility * 100., average));
             listeners.forEach(listener -> listener.notify(volatility, average));
             lastUpdateTime = currentTime;
@@ -47,7 +45,10 @@ public class VolatilityService {
     /**
      * Метод определяет волатильность актива
      */
-    private double calculateVolatility() {
+    private double calculateVolatility(long currentTime) {
+        List<MarketEntry> marketData = getMarketData(currentTime - VOLATILITY_CALCULATE_DAYS_COUNT * 24L * 60L * 60L * 1000L,
+                VOLATILITY_CALCULATE_DAYS_COUNT, MarketInterval.DAILY);
+
         if (marketData == null || marketData.size() < 2) {
             return 0.;
         }
@@ -64,7 +65,10 @@ public class VolatilityService {
     /**
      * Метод определяет среднюю цену актива
      */
-    private double calculateAverage() {
+    private double calculateAverage(long currentTime) {
+        List<MarketEntry> marketData = getMarketData(currentTime - AVERAGE_PRICE_CALCULATE_DAYS_COUNT * 24L * 60L * 60L * 1000L,
+                AVERAGE_PRICE_CALCULATE_DAYS_COUNT * 24 * 4, MarketInterval.FIFTEEN_MINUTES);
+
         if (marketData == null || marketData.size() < 2) {
             return 0.;
         }
@@ -78,7 +82,7 @@ public class VolatilityService {
         return sum / subMarketData.size();
     }
 
-    private List<MarketEntry> getDailyMarketData(long start) {
+    private List<MarketEntry> getMarketData(long start, int limit, MarketInterval interval) {
 
         BybitApiMarketRestClient client = BybitApiClientFactory
                 .newInstance(BybitApiConfig.MAINNET_DOMAIN, false)
@@ -89,8 +93,8 @@ public class VolatilityService {
                 .category(CategoryType.LINEAR)
                 .symbol(SYMBOL)
                 .start(start)
-                .marketInterval(MarketInterval.DAILY)
-                .limit(VOLATILITY_CALCULATE_DAYS_COUNT)
+                .marketInterval(interval)
+                .limit(limit)
                 .build();
 
         // get response

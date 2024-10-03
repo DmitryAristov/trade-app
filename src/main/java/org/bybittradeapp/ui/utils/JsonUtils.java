@@ -37,7 +37,7 @@ public class JsonUtils {
         final ArrayNode ohlcv = mapper.createArrayNode();
         uiMarketData.forEach((key, value) -> {
             ArrayNode entryNode = mapper.createArrayNode();
-            entryNode.add(value.getStartTime());
+            entryNode.add(value.getStartTime() + ZONE_DELAY_MILLS);
             entryNode.add(value.getOpenPrice());
             entryNode.add(value.getHighPrice());
             entryNode.add(value.getLowPrice());
@@ -113,17 +113,17 @@ public class JsonUtils {
         for (Imbalance imbalance : imbalances) {
             Optional<Long> startTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime_ -> startTime_ < imbalance.getStartTime())
+                    .filter(startTime_ -> startTime_ < imbalance.getStartTime() + ZONE_DELAY_MILLS)
                     .max(Comparator.comparing(Long::longValue));
 
             Optional<Long> endTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(endTime_ -> endTime_ > imbalance.getEndTime())
+                    .filter(endTime_ -> endTime_ > imbalance.getEndTime() + ZONE_DELAY_MILLS)
                     .min(Comparator.comparing(Long::longValue));
 
             Optional<Long> completeTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime())
+                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime() + ZONE_DELAY_MILLS)
                     .min(Comparator.comparing(Long::longValue));
 
             if (startTime.isEmpty() || endTime.isEmpty() || completeTime.isEmpty()) {
@@ -184,7 +184,7 @@ public class JsonUtils {
             Segment segmentComplete = new Segment("completed", "Segment", mapper.createArrayNode(), settingsComplete);
 
             ObjectNode segmentNodeComplete = mapper.valueToTree(segmentComplete);
-            onchart.add(segmentNodeComplete);
+//            onchart.add(segmentNodeComplete);
         }
     }
 
@@ -282,6 +282,16 @@ public class JsonUtils {
 
         if (!positions.isEmpty()) {
             positionSerializer.serialize(positions);
+        }
+    }
+
+    public static<T> List<T> deserialize(Class<T> clazz) {
+        if (clazz == Imbalance.class) {
+            return (List<T>) imbalanceSerializer.deserialize();
+        } else if (clazz == Position.class) {
+            return (List<T>) positionSerializer.deserialize();
+        } else {
+            return (List<T>) extremumSerializer.deserialize();
         }
     }
 

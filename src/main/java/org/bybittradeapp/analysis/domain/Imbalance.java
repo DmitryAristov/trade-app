@@ -1,6 +1,7 @@
 package org.bybittradeapp.analysis.domain;
 
 import java.io.Serializable;
+import java.time.Instant;
 
 public class Imbalance implements Serializable {
 
@@ -109,10 +110,10 @@ public class Imbalance implements Serializable {
     @Override
     public String toString() {
         return "Imbalance{" +
-                "endTime=" + endTime +
-                ", endPrice=" + endPrice +
+                "startTime=" + Instant.ofEpochMilli(startTime) +
                 ", startPrice=" + startPrice +
-                ", startTime=" + startTime +
+                ", endTime=" + Instant.ofEpochMilli(endTime) +
+                ", endPrice=" + endPrice +
                 ", type=" + type +
                 '}';
     }
