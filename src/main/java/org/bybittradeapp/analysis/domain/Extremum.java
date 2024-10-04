@@ -1,7 +1,12 @@
 package org.bybittradeapp.analysis.domain;
 
 import java.io.Serializable;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Objects;
+
+import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Extremum implements Serializable {
     public enum Type {
@@ -61,10 +66,9 @@ public class Extremum implements Serializable {
 
     @Override
     public String toString() {
-        return "Extremum{" +
-                "timestamp=" + timestamp +
-                ", price=" + price +
-                ", type=" + type +
-                '}';
+        return "Extremum" + "\n" +
+                "   timestamp :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(timestamp), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
+                "   price :: " + String.format("%.2f", price) + "\n" +
+                "   type :: " + type + "\n";
     }
 }

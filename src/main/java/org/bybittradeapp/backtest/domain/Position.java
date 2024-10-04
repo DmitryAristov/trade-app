@@ -1,8 +1,15 @@
 package org.bybittradeapp.backtest.domain;
 
-import java.io.Serializable;
+import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
 
-import static org.bybittradeapp.backtest.service.ExchangeSimulator.TRADE_FEE;
+import java.io.Serializable;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
+import static org.bybittradeapp.backtest.service.ExchangeSimulator.MARKET_ORDER_TRADE_FEE;
+import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Position implements Serializable {
     private final Order order;
@@ -32,15 +39,16 @@ public class Position implements Serializable {
      * Сразу заполняется комиссия за открытие и размер позиции в биткоинах (BTC).
      * При первом вызове чтобы комиссия за закрытие не была равна 0, заполняем ее комиссией за открытие.
      */
-    public Position(Order order, double openPrice, long openTime) {
+    public Position(Order order, MarketEntry currentEntry, long openTime) {
         this.order = order;
-        this.openPrice = openPrice;
+        this.openPrice = currentEntry.average();
         this.openTime = openTime;
         this.amountInBTC = order.getMoneyAmount() / openPrice;
         this.takeProfitPrice = order.getTakeProfitPrice();
         this.stopLossPrice = order.getStopLossPrice();
-        this.openFee = order.getMoneyAmount() * TRADE_FEE;
-        this.closeFee = order.getMoneyAmount() * TRADE_FEE;
+        this.openFee = order.getMoneyAmount() * MARKET_ORDER_TRADE_FEE;
+        this.closeFee = order.getMoneyAmount() * MARKET_ORDER_TRADE_FEE;
+        Log.debug("created: " + this);
     }
 
     /**
@@ -50,17 +58,20 @@ public class Position implements Serializable {
         this.closePrice = closePrice;
         this.closeTime = closeTime;
         this.isOpen = false;
-        this.closeFee = amountInBTC * closePrice * TRADE_FEE;
+        this.closeFee = amountInBTC * closePrice * MARKET_ORDER_TRADE_FEE;
+        Log.debug("closed: " + this);
     }
 
     /**
      * Посчитать прибыль/убыток без учета комиссии. Уже включено кредитное плечо
      */
     public double getProfitLoss() {
-        return switch (order.getType()) {
+        double profitLoss = switch (order.getType()) {
             case LONG -> (closePrice - openPrice) * amountInBTC;
             case SHORT -> (openPrice - closePrice) * amountInBTC;
         };
+        Log.debug(String.format("profitLoss :: %.2f", profitLoss));
+        return profitLoss;
     }
 
     /**
@@ -68,7 +79,7 @@ public class Position implements Serializable {
      */
     public void setClosePrice(double closePrice) {
         this.closePrice = closePrice;
-        this.closeFee = amountInBTC * closePrice * TRADE_FEE;
+        this.closeFee = amountInBTC * closePrice * MARKET_ORDER_TRADE_FEE;
     }
 
     /**
@@ -139,6 +150,19 @@ public class Position implements Serializable {
 
     public double getClosePrice() {
         return closePrice;
+    }
+
+    @Override
+    public String toString() {
+        return "Position" + "\n" +
+                "   amountInBTC :: " + String.format("%.4f", amountInBTC) + "\n" +
+                "   openTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
+                "   openPrice :: " + String.format("%.2f", openPrice) + "\n" +
+                "   openFee :: " + String.format("%.2f", openFee) + "\n" +
+                "   closePrice :: " + String.format("%.2f", closePrice) + "\n" +
+                "   closeFee :: " + String.format("%.2f", closeFee) + "\n" +
+                "   takeProfitPrice :: " + String.format("%.2f", takeProfitPrice) + "\n" +
+                "   stopLossPrice :: " + String.format("%.2f", stopLossPrice) + "\n";
     }
 }
 

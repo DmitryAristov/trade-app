@@ -19,7 +19,7 @@ import java.util.stream.Collectors;
  * Поддерживает комиссии за открытие и закрытие позиций.
  */
 public class ExchangeSimulator {
-    public static final double TRADE_FEE = 0.001;
+    public static final double MARKET_ORDER_TRADE_FEE = 0.00036;
 
     private final List<Order> limitOrders;
     private final List<Position> positions;
@@ -31,40 +31,39 @@ public class ExchangeSimulator {
         this.account = account;
     }
 
-    public void onTick(long currentTime, MarketEntry marketEntry) {
-        double currentPrice = (marketEntry.high() + marketEntry.low()) / 2.;
-        executeLimitOrders(currentTime, currentPrice);
-        checkAndClosePositions(currentTime, currentPrice);
+    public void onTick(long currentTime, MarketEntry currentEntry) {
+        executeLimitOrders(currentTime, currentEntry);
+        checkAndClosePositions(currentTime, currentEntry);
     }
 
     /**
      * Лимитные ордера добавляем в список для отслеживания
      * Рыночные ордера исполняем сразу
      */
-    public void submitOrder(Order order, long currentTime, double currentPrice) {
+    public void submitOrder(Order order, long currentTime, MarketEntry currentEntry) {
         if (order.getExecutionType() == ExecutionType.MARKET) {
-            executeMarketOrder(order, currentTime, currentPrice);
+            executeMarketOrder(order, currentTime, currentEntry);
         } else {
             limitOrders.add(order);
         }
     }
 
-    private void executeMarketOrder(Order order, long currentTime, double currentPrice) {
+    private void executeMarketOrder(Order order, long currentTime, MarketEntry currentEntry) {
         order.fill();
-        openPosition(order, currentTime, currentPrice);
+        openPosition(order, currentTime, currentEntry);
     }
 
     /**
      * Если ордер не исполнен, не отменен и если он может быть исполнен ->
      * ордер становится исполнен, добавляем открытую позицию
      */
-    private void executeLimitOrders(long currentTime, double currentPrice) {
+    private void executeLimitOrders(long currentTime, MarketEntry currentEntry) {
         Iterator<Order> iterator = limitOrders.iterator();
         while (iterator.hasNext()) {
             Order order = iterator.next();
-            if (!order.isFilled() && !order.isCanceled() && order.isExecutable(currentPrice)) {
+            if (!order.isFilled() && !order.isCanceled() && order.isExecutable(currentEntry)) {
                 order.fill();
-                openPosition(order, currentTime, currentPrice);
+                openPosition(order, currentTime, currentEntry);
                 iterator.remove();
             }
         }
@@ -74,74 +73,75 @@ public class ExchangeSimulator {
      * Если открытая позиция достигает стоп лосса или тейк профита ->
      * закрываем и обновляем депозит
      */
-    private void checkAndClosePositions(long currentTime, double currentPrice) {
+    private void checkAndClosePositions(long currentTime, MarketEntry currentEntry) {
         positions.stream()
                 .filter(Position::isOpen)
                 .forEach(position -> {
                     switch (position.getOrder().getType()) {
                         case LONG -> {
-                            if (position.getTakeProfitPrice() <= currentPrice) {
+                            if (position.getTakeProfitPrice() <= currentEntry.high()) {
                                 // если текущая цена выше чем цена автоматического тейка -> закрываем позицию с прибылью
-                                closePosition(position, currentTime, currentPrice);
-                            } else if (position.getStopLossPrice() >= currentPrice) {
-                                // если текущая цена ниже чем цена автоматического лосса -> закрываем позицию с прибылью
-                                closePosition(position, currentTime, currentPrice);
+                                closeTake(position, currentTime);
+                            } else if (position.getStopLossPrice() >= currentEntry.low()) {
+                                // если текущая цена ниже чем цена автоматического лосса -> закрываем позицию с убытком
+                                closeLoss(position, currentTime);
                             } else {
                                 // если позиция не была закрыта автоматически,
                                 // обновляем цену закрытия согласно текущей цене и комиссию за закрытие
-                                position.setClosePrice(currentPrice);
+                                position.setClosePrice(currentEntry.high());
                             }
                         }
                         case SHORT -> {
-                            if (position.getTakeProfitPrice() >= currentPrice) {
+                            if (position.getTakeProfitPrice() >= currentEntry.low()) {
                                 // если текущая цена ниже чем цена автоматического тейка -> закрываем позицию с прибылью
-                                closePosition(position, currentTime, currentPrice);
-                            } else if (position.getStopLossPrice() <= currentPrice) {
+                                closeTake(position, currentTime);
+                            } else if (position.getStopLossPrice() <= currentEntry.high()) {
                                 // если текущая цена выше чем цена автоматического лосса -> закрываем позицию с убытком
-                                closePosition(position, currentTime, currentPrice);
+                                closeLoss(position, currentTime);
                             } else {
                                 // если позиция не была закрыта автоматически,
                                 // обновляем цену закрытия согласно текущей цене и комиссию за закрытие
-                                position.setClosePrice(currentPrice);
+                                position.setClosePrice(currentEntry.low());
                             }
                         }
                     }
                 });
     }
 
-    private void openPosition(Order order, long time, double price) {
-        Position position = new Position(order, price, time);
+    private void openPosition(Order order, long currentTime, MarketEntry currentEntry) {
+        Position position = new Position(order, currentEntry, currentTime);
         positions.add(position);
         account.updateBalance(position);
-        Log.log(String.format("%s OPENED ||| price: %.2f ||| money: %.2f ||| fee: %.2f ||| balance: %.2f ||| on %s",
+        Log.debug(String.format("%s OPENED ||| price: %.2f ||| money: %.2f ||| fee: %.2f ||| balance: %.2f ||| on %s",
                 position.getOrder().getType(),
-                price,
+                position.getOpenPrice(),
                 position.getOrder().getMoneyAmount(),
                 position.getOpenFee(),
                 account.getBalance(),
-                Instant.ofEpochMilli(time)));
+                Instant.ofEpochMilli(currentTime)));
     }
 
-    public void closePosition(Position position, long time, double price) {
-        position.close(time, price);
+    public void closeTake(Position position, long currentTime) {
+        position.close(currentTime, position.getTakeProfitPrice());
         account.updateBalance(position);
-        if (position.getProfitLoss() > 0.) {
-            Log.log(String.format("%s CLOSED ||| P&L++++: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f ||| on %s",
-                    position.getOrder().getType(),
-                    position.getProfitLoss(),
-                    position.getClosePrice(),
-                    position.getCloseFee(),
-                    account.getBalance(),
-                    Instant.ofEpochMilli(time)));
-        } else {
-            Log.log(String.format("%s CLOSED ||| P&L----: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f ||| on %s",
-                    position.getOrder().getType(),
-                    position.getProfitLoss(),
-                    position.getClosePrice(),
-                    position.getCloseFee(),
-                    account.getBalance(),
-                    Instant.ofEpochMilli(time)));
-        }
+        Log.debug(String.format("%s CLOSED ||| P&L++++: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f |||",
+                position.getOrder().getType(),
+                position.getProfitLoss(),
+                position.getClosePrice(),
+                position.getCloseFee(),
+                account.getBalance()), Instant.ofEpochMilli(currentTime));
+    }
+
+    public void closeLoss(Position position, long currentTime) {
+        position.close(currentTime, position.getStopLossPrice());
+        account.updateBalance(position);
+        Log.debug(String.format("%s CLOSED ||| P&L----: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f |||",
+                position.getOrder().getType(),
+                position.getProfitLoss(),
+                position.getClosePrice(),
+                position.getCloseFee(),
+                account.getBalance()),
+                Instant.ofEpochMilli(currentTime));
     }
 
     public List<Position> getOpenPositions() {

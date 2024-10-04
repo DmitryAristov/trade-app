@@ -30,13 +30,13 @@ public class ExtremumService implements VolatilityListener {
 
     public ExtremumService() {  }
 
-    public void onTick(long time, MarketEntry marketEntry) {
+    public void onTick(long time, MarketEntry currentEntry) {
         //TODO перейти на минутный лист
-//        updateData(time, marketEntry);
+//        updateData(time, currentEntry);
     }
 
-    private void updateData(long time, MarketEntry marketEntry) {
-        data.put(time, marketEntry);
+    private void updateData(long time, MarketEntry currentEntry) {
+        data.put(time, currentEntry);
         if (time - data.lastKey() > SEARCH_TIME_WINDOW) {
             data.pollFirstEntry();
         }
@@ -54,7 +54,7 @@ public class ExtremumService implements VolatilityListener {
          */
         TreeMap<Long, Double> average = movingAverage(data, initialMaTimeWindow);
         List<Extremum> extremums = findExtremums(average);
-        Log.log("initially found " + extremums.size() + " extremums");
+        Log.debug("initially found " + extremums.size() + " extremums");
 
         final long secondCount = Math.round(initialMaTimeWindow * 0.8);
         List<Extremum> extremums500 = mapExtremumsToNewMa(data, extremums, secondCount);
@@ -66,7 +66,7 @@ public class ExtremumService implements VolatilityListener {
         List<Extremum> extremums200 = mapExtremumsToNewMa(data, extremums300, fifthCount);
         final long sixthCount = Math.round(initialMaTimeWindow * 0.15);
         List<Extremum> extremums100 = mapExtremumsToNewMa(data, extremums200, sixthCount);
-        Log.log("after all mappings we have " + extremums100.size() + " extremums");
+        Log.debug("after all mappings we have " + extremums100.size() + " extremums");
 
         Set<Extremum> extrema = new HashSet<>();
 
@@ -83,19 +83,19 @@ public class ExtremumService implements VolatilityListener {
                                 Map.Entry<Long, MarketEntry> max = data.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
-                                        .max(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
+                                        .max(Comparator.comparing(currentEntry_ -> currentEntry_.getValue().average()))
                                         .get();
 
-                                extrema.add(new Extremum(max.getKey(), (max.getValue().high() + max.getValue().high()) / 2., Extremum.Type.MAX));
+                                extrema.add(new Extremum(max.getKey(), max.getValue().average(), Extremum.Type.MAX));
                             }
                             if (extremum.getType() == Extremum.Type.MIN) {
                                 Map.Entry<Long, MarketEntry> min = data.entrySet().stream()
                                         .filter(entry_ -> entry.getKey() - entry_.getKey() > -MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW &&
                                                 entry.getKey() - entry_.getKey() < MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW)
-                                        .min(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.))
+                                        .min(Comparator.comparing(currentEntry_ -> currentEntry_.getValue().average()))
                                         .get();
 
-                                extrema.add(new Extremum(min.getKey(), (min.getValue().high() + min.getValue().high()) / 2., Extremum.Type.MIN));
+                                extrema.add(new Extremum(min.getKey(), min.getValue().average(), Extremum.Type.MIN));
                             }
                         }));
 
@@ -104,7 +104,7 @@ public class ExtremumService implements VolatilityListener {
          */
         List<Extremum> result = extrema.stream().sorted(Comparator.comparing(Extremum::getTimestamp)).toList();
 
-        Log.log("start filtering...");
+        Log.debug("start filtering...");
         do {
             removeSeveralOneTypeExtremums(result);
             removeMinHigherThanMax(data, result);
@@ -112,7 +112,7 @@ public class ExtremumService implements VolatilityListener {
         } while (extremaAreNotCorrect(result));
 
         correctExtremumsIfThereOneIsBetween(data, result);
-        Log.log("found " + extrema.size() + " extremums");
+        Log.debug("found " + extrema.size() + " extremums");
 
         return result;
     }
@@ -135,7 +135,7 @@ public class ExtremumService implements VolatilityListener {
             TreeMap<Long, Double> marketDataBetweenMinMax = marketData.entrySet().stream()
                     .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < curr.getTimestamp())
                     .collect(Collectors.toMap(Map.Entry::getKey,
-                            entry_ -> (entry_.getValue().high() + entry_.getValue().low()) / 2.,
+                            entry_ -> entry_.getValue().average(),
                             (first, second) -> first,
                             TreeMap::new
                     ));
@@ -151,15 +151,15 @@ public class ExtremumService implements VolatilityListener {
             if (lowerThanMin.isPresent()) {
                 min.setTimestamp(lowerThanMin.get().getKey());
                 min.setPrice(lowerThanMin.get().getValue());
-                Log.log("MIN corrected");
+                Log.debug("MIN corrected");
             }
             if (higherThanMax.isPresent()) {
                 max.setTimestamp(higherThanMax.get().getKey());
                 max.setPrice(higherThanMax.get().getValue());
-                Log.log("MAX corrected");
+                Log.debug("MAX corrected");
             }
         }
-        Log.log("extremums size: " + extrema.size());
+        Log.debug("extremums size: " + extrema.size());
     }
 
     /**
@@ -189,10 +189,10 @@ public class ExtremumService implements VolatilityListener {
                     }
                 }
             }
-            Log.log("removed " + toRemove.size() + " nearly extremums (price diff < " + minPriceDiff);
+            Log.debug("removed " + toRemove.size() + " nearly extremums (price diff < " + minPriceDiff);
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        Log.log("extremums size: " + extrema.size());
+        Log.debug("extremums size: " + extrema.size());
     }
 
     /**
@@ -212,13 +212,13 @@ public class ExtremumService implements VolatilityListener {
                     if (curr.getPrice() > prev.getPrice()) {
                         Optional<Map.Entry<Long, MarketEntry>> minBetweenPrevNext = marketData.entrySet().stream()
                                 .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
-                                .min(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.));
+                                .min(Comparator.comparing(currentEntry_ -> currentEntry_.getValue().average()));
 
                         if (minBetweenPrevNext.isPresent() &&
-                                (minBetweenPrevNext.get().getValue().low() + minBetweenPrevNext.get().getValue().high()) / 2. < prev.getPrice()) {
-                            curr.setPrice((minBetweenPrevNext.get().getValue().low() + minBetweenPrevNext.get().getValue().high()) / 2.);
+                                minBetweenPrevNext.get().getValue().average() < prev.getPrice()) {
+                            curr.setPrice(minBetweenPrevNext.get().getValue().average());
                             curr.setTimestamp(minBetweenPrevNext.get().getKey());
-                            Log.log("MIN > MAX corrected");
+                            Log.debug("MIN > MAX corrected");
                         } else {
                             toRemove.add(prev);
                             toRemove.add(curr);
@@ -228,13 +228,13 @@ public class ExtremumService implements VolatilityListener {
                     if (curr.getPrice() < prev.getPrice()) {
                         Optional<Map.Entry<Long, MarketEntry>> maxBetweenPrevNext = marketData.entrySet().stream()
                                 .filter(data -> data.getKey() > prev.getTimestamp() && data.getKey() < next.getTimestamp())
-                                .max(Comparator.comparing(marketEntry_ -> (marketEntry_.getValue().low() + marketEntry_.getValue().high()) / 2.));
+                                .max(Comparator.comparing(currentEntry_ -> currentEntry_.getValue().average()));
 
                         if (maxBetweenPrevNext.isPresent() &&
-                                (maxBetweenPrevNext.get().getValue().low() + maxBetweenPrevNext.get().getValue().high()) / 2. < prev.getPrice()) {
-                            curr.setPrice((maxBetweenPrevNext.get().getValue().low() + maxBetweenPrevNext.get().getValue().high()) / 2.);
+                                maxBetweenPrevNext.get().getValue().average() < prev.getPrice()) {
+                            curr.setPrice(maxBetweenPrevNext.get().getValue().average());
                             curr.setTimestamp(maxBetweenPrevNext.get().getKey());
-                            Log.log("MAX < MIN corrected");
+                            Log.debug("MAX < MIN corrected");
                         } else {
                             toRemove.add(prev);
                             toRemove.add(curr);
@@ -242,10 +242,10 @@ public class ExtremumService implements VolatilityListener {
                     }
                 }
             }
-            Log.log("removed " + toRemove.size() + " MIN > MAX rows");
+            Log.debug("removed " + toRemove.size() + " MIN > MAX rows");
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        Log.log("extremums size: " + extrema.size());
+        Log.debug("extremums size: " + extrema.size());
     }
 
     /**
@@ -274,10 +274,10 @@ public class ExtremumService implements VolatilityListener {
                     }
                 }
             }
-            Log.log("removed " + toRemove.size() + " MAX,MAX... rows");
+            Log.debug("removed " + toRemove.size() + " MAX,MAX... rows");
             extrema.removeAll(toRemove);
         } while (!toRemove.isEmpty());
-        Log.log("extremums size: " + extrema.size());
+        Log.debug("extremums size: " + extrema.size());
     }
 
     @NotNull
@@ -316,13 +316,13 @@ public class ExtremumService implements VolatilityListener {
 
             // Add the new price to the sum
             window.addLast(currentEntry);
-            sum += (currentEntry.getValue().high() + currentEntry.getValue().low()) / 2.;
+            sum += currentEntry.getValue().average();
 
             // Check the time difference between the first and last elements of the window
             while (!window.isEmpty() && (window.getLast().getKey() - window.getFirst().getKey() > timeWindow)) {
                 // Remove the oldest price from the sum and the window
                 MarketEntry entryToRemove = window.removeFirst().getValue();
-                sum -= (entryToRemove.high() + entryToRemove.low()) /2.;
+                sum -= entryToRemove.average();
             }
 
             // Calculate the moving average for the current window and add it to the result map

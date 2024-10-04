@@ -12,6 +12,7 @@ import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.jetbrains.annotations.NotNull;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +24,7 @@ public class VolatilityService {
      * Период обновления волатильности и средней цены (1000мс * 60с * 60м * 24ч = 1 день)
      */
     private static final long UPDATE_TIME_PERIOD_MILLS = 24L * 60L * 60L * 1000L;
-    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 60;
+    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 10;
     private static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 5;
 
     private long lastUpdateTime = -1L;
@@ -34,9 +35,10 @@ public class VolatilityService {
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
         if (currentTime - lastUpdateTime > UPDATE_TIME_PERIOD_MILLS) {
-            double volatility = calculateVolatility(currentTime);
+//            double volatility = calculateVolatility(currentTime);
+            double volatility = 0.05;
             double average = calculateAverage(currentTime);
-            Log.log(String.format("calculated new volatility=%.2f%% and average=%.2f$", volatility * 100., average));
+            Log.debug(String.format("volatility=%.2f. average=%.2f", volatility, average), Instant.ofEpochMilli(currentTime));
             listeners.forEach(listener -> listener.notify(volatility, average));
             lastUpdateTime = currentTime;
         }
@@ -56,7 +58,7 @@ public class VolatilityService {
         List<Double> changes = new ArrayList<>();
         for (MarketEntry marketDatum : marketData) {
             double priceDiff = marketDatum.high() - marketDatum.low();
-            double priceAverage = (marketDatum.high() + marketDatum.low()) / 2.;
+            double priceAverage = marketDatum.average();
             changes.add(priceDiff / priceAverage);
         }
         return changes.stream().reduce(0., Double::sum) / changes.size();
@@ -76,7 +78,7 @@ public class VolatilityService {
 
         double sum = 0;
         for (MarketEntry marketDatum : subMarketData) {
-            double priceAverage = (marketDatum.high() + marketDatum.low()) / 2.;
+            double priceAverage = marketDatum.average();
             sum += priceAverage;
         }
         return sum / subMarketData.size();
@@ -99,8 +101,8 @@ public class VolatilityService {
 
         // get response
         var marketKlineResultRaw = client.getMarketLinesData(marketKLineRequest);
-        var marketKlineResultGenericResponse = mapper.convertValue(marketKlineResultRaw, GenericResponse.class);
-        var marketKlineResult = mapper.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
+        var marketKlineResultGenericResponse = MAPPER.convertValue(marketKlineResultRaw, GenericResponse.class);
+        var marketKlineResult = MAPPER.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
 
         return marketKlineResult.getMarketKlineEntries()
                 .stream()

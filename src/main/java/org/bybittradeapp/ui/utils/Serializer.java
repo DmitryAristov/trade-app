@@ -3,6 +3,7 @@ package org.bybittradeapp.ui.utils;
 import org.bybittradeapp.logging.Log;
 
 import java.io.*;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Map;
 
@@ -20,17 +21,20 @@ public class Serializer<T> {
         try (FileOutputStream fileOutputStream = new FileOutputStream(path + SYMBOL);
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
         ) {
-            Log.log("serializing...");
+            Log.debug("serializing...");
             objectOutputStream.writeObject(data);
             if (data instanceof Collection<?>) {
-                Log.log("list size=[" + ((Collection<?>) data).size() + "] serialized");
+                Log.debug("list size=[" + ((Collection<?>) data).size() + "] serialized");
             } else if (data instanceof Map<?,?>){
-                Log.log("map size=[" + ((Map<?, ?>) data).size() + "] serialized");
+                Log.debug("map size=[" + ((Map<?, ?>) data).size() + "] serialized");
             } else {
-                Log.log("object=" + data.toString() + " serialized");
+                Log.debug("object=" + data.toString() + " serialized");
             }
         } catch (IOException e) {
-            Log.log("error serialize object: " + e.getMessage());
+            Log.debug("serialize throws exception: " +
+                    e.getMessage() + "\n" +
+                    Arrays.toString(e.getStackTrace()));
+            throw new RuntimeException(e);
         }
     }
 
@@ -39,18 +43,20 @@ public class Serializer<T> {
         try (FileInputStream fileInputStream = new FileInputStream(path + SYMBOL);
              ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)
         ) {
-            Log.log("deserializing...");
+            Log.debug("deserializing...");
             T data = (T) objectInputStream.readObject();
             if (data instanceof Collection<?>) {
-                Log.log("list size=[" + ((Collection<?>) data).size() + "] deserialized");
+                Log.debug("list size=[" + ((Collection<?>) data).size() + "] deserialized");
             } else if (data instanceof Map<?,?>){
-                Log.log("map size=[" + ((Map<?, ?>) data).size() + "] deserialized");
+                Log.debug("map size=[" + ((Map<?, ?>) data).size() + "] deserialized");
             } else {
-                Log.log("object=" + data.toString() + " deserialized");
+                Log.debug("object=" + data.toString() + " deserialized");
             }
             return data;
         } catch (ClassNotFoundException | IOException e) {
-            Log.log("error deserialize object: " + e.getMessage());
+            Log.debug("deserialize throws exception: " +
+                    e.getMessage() + "\n" +
+                    Arrays.toString(e.getStackTrace()));
             return null;
         }
     }

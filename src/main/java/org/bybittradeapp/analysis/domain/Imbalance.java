@@ -1,29 +1,25 @@
 package org.bybittradeapp.analysis.domain;
 
+import org.bybittradeapp.logging.Log;
+
 import java.io.Serializable;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
+import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Imbalance implements Serializable {
 
     public enum Type { UP, DOWN }
 
-    private Type type;
+    private final Type type;
     private long startTime;
     private double startPrice;
     private double endPrice;
     private long endTime;
     private long completeTime;
     private double completePrice;
-    private int completesCount = 0;
-    private int combinesCount = 0;
-
-    public Imbalance(long startTime, double startPrice, long endTime, double endPrice) {
-        this.startTime = startTime;
-        this.endTime = endTime;
-        this.startPrice = startPrice;
-        this.endPrice = endPrice;
-        this.type = startPrice - endPrice > 0 ? Type.DOWN : Type.UP;
-    }
 
     public Imbalance(long startTime, double startPrice, long endTime, double endPrice, Type type) {
         this.startTime = startTime;
@@ -33,14 +29,8 @@ public class Imbalance implements Serializable {
         this.type = type;
     }
 
-    public Imbalance() {  }
-
     public Type getType() {
         return type;
-    }
-
-    public void setType(Type type) {
-        this.type = type;
     }
 
     public long getStartTime() {
@@ -91,30 +81,23 @@ public class Imbalance implements Serializable {
         this.completePrice = completePrice;
     }
 
-    public void incrementCompletesCount() {
-        this.completesCount++;
+    public double size() {
+        return switch (type) {
+            case UP -> endPrice - startPrice;
+            case DOWN -> startPrice - endPrice;
+        };
     }
 
-    public int getCompletesCount() {
-        return completesCount;
-    }
-
-    public void setCombinesCount(int combinesCount) {
-        this.combinesCount = combinesCount;
-    }
-
-    public int getCombinesCount() {
-        return combinesCount;
+    public double speed() {
+        return size() / (endTime - startTime);
     }
 
     @Override
     public String toString() {
-        return "Imbalance{" +
-                "startTime=" + Instant.ofEpochMilli(startTime) +
-                ", startPrice=" + startPrice +
-                ", endTime=" + Instant.ofEpochMilli(endTime) +
-                ", endPrice=" + endPrice +
-                ", type=" + type +
-                '}';
+        return "Imbalance" + "\n" +
+                "   startTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
+                "   startPrice :: " + startPrice + "\n" +
+                "   endTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(endTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
+                "   endPrice :: " + endPrice + "\n";
     }
 }

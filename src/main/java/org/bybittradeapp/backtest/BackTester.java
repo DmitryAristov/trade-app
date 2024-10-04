@@ -19,7 +19,6 @@ import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.bybittradeapp.logging.Log.logProgress;
-import static org.bybittradeapp.ui.utils.JsonUtils.updateMarketData;
 
 /**
  * Для тестирования стратегии на предыдущих исторических данных.
@@ -43,14 +42,15 @@ public class BackTester {
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
-        this.imbalanceService = new ImbalanceService(null);
+        this.imbalanceService = new ImbalanceService();
+        this.imbalanceService.setMarketData(marketData);
+
         this.trendService = new TrendService();
         this.extremumService = new ExtremumService();
 
         volatilityService.subscribeAll(List.of(this.imbalanceService, this.extremumService, this.trendService));
 
         this.strategy = new Strategy(simulator, marketData, imbalanceService, extremumService, trendService, account);
-//        updateMarketData(uiMarketData);
     }
 
     public void runTests() {
@@ -58,29 +58,21 @@ public class BackTester {
         long startTime = Instant.now().toEpochMilli();
         long firstKey = marketData.firstKey();
         long lastKey = marketData.lastKey();
-//        long firstKey = 1722816000000L;
-//        long lastKey = 1722938400000L;
 
-        Log.log(String.format("starting backtest with balance %.2f$", account.getBalance()));
-        marketData
-//                .subMap(firstKey, lastKey)
-                .forEach((key, marketEntry) -> {
-                    volatilityService.onTick(key, marketEntry);
-                    imbalanceService.onTick(key, marketEntry);
-                    strategy.onTick(key, marketEntry);
-                    simulator.onTick(key, marketEntry);
+        Log.info(String.format("starting backtest with balance %.2f$", account.getBalance()));
+        marketData.forEach((currentTime, currentEntry) -> {
+            volatilityService.onTick(currentTime, currentEntry);
+            imbalanceService.onTick(currentTime, currentEntry);
+            strategy.onTick(currentTime, currentEntry);
+            simulator.onTick(currentTime, currentEntry);
 
-                    double progress = ((double) (key - firstKey)) / ((double) (lastKey - firstKey));
-                    logProgress(startTime, step, progress, "backtest");
-                });
-        Log.log(String.format("backtest finished with balance %.2f$", account.getBalance()));
+            double progress = ((double) (currentTime - firstKey)) / ((double) (lastKey - firstKey));
+            logProgress(startTime, step, progress, "backtest");
+        });
+        Log.info(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
-//        var uiMarketDataFiltered = uiMarketData.stream()
-//                .filter(entry -> entry.getStartTime() >= firstKey - 5 * 60 * 1000L && entry.getStartTime() <= lastKey + 5 * 60 * 1000L)
-//                .collect(Collectors.toList());
-//        JsonUtils.updateMarketData(uiMarketDataFiltered);
-
-        JsonUtils.updateAnalysedData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
+        JsonUtils.updateUiMarketData(uiMarketData);
+        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions());
     }
 }

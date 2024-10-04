@@ -9,6 +9,7 @@ import com.bybit.api.client.domain.market.response.kline.MarketKlineResult;
 import com.bybit.api.client.restApi.BybitApiMarketRestClient;
 import com.bybit.api.client.service.BybitApiClientFactory;
 import com.fasterxml.jackson.core.type.TypeReference;
+import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.ui.domain.MarketKlineEntry;
 import org.jetbrains.annotations.NotNull;
@@ -18,12 +19,13 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.util.Arrays;
 import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.bybittradeapp.Main.*;
-import static org.bybittradeapp.Main.mapper;
+import static org.bybittradeapp.Main.MAPPER;
 
 
 /**
@@ -46,8 +48,8 @@ public class ExchangeRequestService {
                 .newInstance(BybitApiConfig.MAINNET_DOMAIN, false)
                 .newMarketDataRestClient();
         var marketKlineResultRaw = client.getMarketLinesData(marketKLineRequest);
-        var marketKlineResultGenericResponse = mapper.convertValue(marketKlineResultRaw, GenericResponse.class);
-        var marketKlineResult = mapper.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
+        var marketKlineResultGenericResponse = MAPPER.convertValue(marketKlineResultRaw, GenericResponse.class);
+        var marketKlineResult = MAPPER.convertValue(marketKlineResultGenericResponse.getResult(), MarketKlineResult.class);
         return marketKlineResult.getMarketKlineEntries()
                 .stream()
                 .collect(Collectors.toMap(
@@ -91,7 +93,7 @@ public class ExchangeRequestService {
             }
             in.close();
 
-            List<List<Object>> klineDataList = mapper.readValue(response.toString(), new TypeReference<>() {});
+            List<List<Object>> klineDataList = MAPPER.readValue(response.toString(), new TypeReference<>() {});
             TreeMap<Long, MarketEntry> priceMap = new TreeMap<>();
 
             for (List<Object> kline : klineDataList) {
@@ -104,9 +106,11 @@ public class ExchangeRequestService {
             }
             return priceMap;
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            Log.debug("performBinanceMarketDataRequest throws exception: " +
+                    e.getMessage() + "\n" +
+                    Arrays.toString(e.getStackTrace()));
+            throw new RuntimeException(e);
         }
-        return null;
     }
 
     public static long toMills(MarketInterval interval) {

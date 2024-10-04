@@ -10,6 +10,7 @@ import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
 import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
+import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 
 import java.util.List;
@@ -30,22 +31,20 @@ public class Strategy {
     public enum State {
         WAIT_IMBALANCE,
         ENTRY_POINT_SEARCH,
-        POSSIBLE_ENTRY_POINT,
         POSITIONS_OPENED,
         WAIT_POSITIONS_CLOSED
     }
 
     /**
-     * Начальная стоп цена, перед которой еще не выставлена без-убыточная стоп цена
-     */
-    private static final double STOP_LOSS_THRESHOLD = 0.02;
-    /**
      * Части от размера имбаланса для первого и второго тейка в случае если закрытие одной позиции происходит по частям.
      *  Пример: имбаланс был 55000$ -> 59000$. Тогда его размер = 4000$.
      *          При SHORT сделке первый тейк будет выставлен на 59000 - 4000 * 0.4 = 57400$.
      */
-    private static final double FIRST_TAKE_PROFIT_THRESHOLD = 0.4;
-    private static final double SECOND_TAKE_PROFIT_THRESHOLD = 0.8;
+    private static final double FIRST_TAKE_PROFIT_THRESHOLD = 0.5;
+    private static final double SECOND_TAKE_PROFIT_THRESHOLD = 1.;
+    private static final double STOP_LOSS_MODIFICATOR = 0.01;
+    private static final double MAX_VALID_IMBALANCE_PART_FOR_POSITION = 0.2;
+    private static final boolean TWO_TAKES = true;
 
     private final ExchangeSimulator simulator;
     private final TreeMap<Long, MarketEntry> marketData;
@@ -68,15 +67,15 @@ public class Strategy {
         this.extremumService = extremumService;
         this.trendService = trendService;
         this.account = account;
+        Log.info(String.format("strategy parameters:\n    firstTake :: %.2f\n    secondTake :: %.2f\n    stopModificator :: %.2f\n    maxValidImbSize :: %.2f\n    2_takes :: %b",
+                FIRST_TAKE_PROFIT_THRESHOLD, SECOND_TAKE_PROFIT_THRESHOLD, STOP_LOSS_MODIFICATOR, MAX_VALID_IMBALANCE_PART_FOR_POSITION, TWO_TAKES));
     }
 
-    public void onTick(long time, MarketEntry marketEntry) {
+    public void onTick(long currentTime, MarketEntry currentEntry) {
 
         //TODO(1) Отслеживать был ли взят имбаланс. Если нет -> брать принудительно если цена еще не сильно вернулась обратно.
         // Переписать имбаланс сервис так чтобы при поиске имбаланса использовались только минутные данные.
         // Основное время программа ищет имбаланс и нет нужды в секундных данных.
-
-        double price = (marketEntry.high() + marketEntry.low()) / 2.;
 
         switch (state) {
             case WAIT_IMBALANCE -> {
@@ -95,58 +94,10 @@ public class Strategy {
                  *    yes - change state to POSSIBLE_ENTRY_POINT
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getCurrentState() == ImbalanceState.POTENTIAL_END_POINT) {
-                    state = State.POSSIBLE_ENTRY_POINT;
+                if (imbalanceService.getCurrentState() == ImbalanceState.COMPLETED) {
+                    openPositions(currentTime, currentEntry);
+                    state = State.POSITIONS_OPENED;
                 }
-            }
-            case POSSIBLE_ENTRY_POINT -> {
-                /*
-                 * Open position with stop loss near to open price.
-                 * After some time position is closed automatically (or manually)?
-                 *    yes - { return without state change }
-                 *    no - change state to POSITION_OPENED
-                 */
-                Imbalance imbalance = imbalanceService.getCurrentImbalance();
-
-
-                Order marketOrder1 = new Order();
-                marketOrder1.setExecutionType(ExecutionType.MARKET);
-                double tp, sl;
-                double imbalanceSize = Math.abs(imbalance.getStartPrice() - imbalance.getEndPrice());
-                if (imbalance.getType() == Imbalance.Type.UP) {
-                    marketOrder1.setType(OrderType.SHORT);
-                    tp = imbalance.getEndPrice() - FIRST_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price + STOP_LOSS_THRESHOLD * imbalanceSize;
-                } else {
-                    marketOrder1.setType(OrderType.LONG);
-                    tp = imbalance.getEndPrice() + FIRST_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price - STOP_LOSS_THRESHOLD * imbalanceSize;
-                }
-                marketOrder1.setExecutionPrice(price);
-                marketOrder1.setTP_SL(tp, sl);
-                marketOrder1.setCreateTime(time);
-                marketOrder1.setMoneyAmount(0.6 * account.calculatePositionSize());
-
-
-                Order marketOrder2 = new Order();
-                marketOrder2.setExecutionType(ExecutionType.MARKET);
-                if (imbalance.getType() == Imbalance.Type.UP) {
-                    marketOrder2.setType(OrderType.SHORT);
-                    tp = imbalance.getEndPrice() - SECOND_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price + STOP_LOSS_THRESHOLD * imbalanceSize;
-                } else {
-                    marketOrder2.setType(OrderType.LONG);
-                    tp = imbalance.getEndPrice() + SECOND_TAKE_PROFIT_THRESHOLD * imbalanceSize;
-                    sl = price - STOP_LOSS_THRESHOLD * imbalanceSize;
-                }
-                marketOrder2.setTP_SL(tp, sl);
-                marketOrder2.setCreateTime(time);
-                marketOrder2.setMoneyAmount(0.4 * account.calculatePositionSize());
-
-                simulator.submitOrder(marketOrder1, time, price);
-                simulator.submitOrder(marketOrder2, time, price);
-
-                state = State.POSITIONS_OPENED;
             }
             case POSITIONS_OPENED -> {
                 /*
@@ -157,21 +108,14 @@ public class Strategy {
                  *    no - { return without state change }
                  */
                 List<Position> positions = simulator.getOpenPositions();
-
                 if (positions.isEmpty()) {
-                    state = State.ENTRY_POINT_SEARCH;
-                }
-
-                if (positions.size() == 2) {
-                    positions.forEach(position -> {
-                        if (position.getProfitLoss() > (position.getOpenFee() + position.getCloseFee()) * 1.2) {
-                            position.setZeroLoss();
-                        }
-                    });
-                }
-
-                if (positions.stream().allMatch(Position::isZeroLoss)) {
-                    state = State.WAIT_POSITIONS_CLOSED;
+                    state = State.WAIT_IMBALANCE;
+                } else if (positions.size() == 1) {
+                    Position position = positions.get(0);
+                    if (position.getProfitLoss() > (position.getOpenFee() + position.getCloseFee()) * 2.) {
+                        position.setZeroLoss();
+                        state = State.WAIT_POSITIONS_CLOSED;
+                    }
                 }
             }
             case WAIT_POSITIONS_CLOSED -> {
@@ -181,5 +125,67 @@ public class Strategy {
                 }
             }
         }
+    }
+
+    private void openPositions(long currentTime, MarketEntry currentEntry) {
+        if (!simulator.getOpenPositions().isEmpty()) {
+            throw new RuntimeException("Trying to open position while already opened " + simulator.getOpenPositions().size());
+        }
+
+        Imbalance imbalance = imbalanceService.getCurrentImbalance();
+        double imbalanceSize = imbalance.size();
+        boolean lowerThanTenPercentsOfImbalanceSize = Math.abs(imbalance.getEndPrice() - currentEntry.average()) / imbalanceSize < MAX_VALID_IMBALANCE_PART_FOR_POSITION;
+        if (!lowerThanTenPercentsOfImbalanceSize) {
+            return;
+        }
+        Log.debug("imbalance when open position :: " + imbalance);
+
+        Order marketOrder1 = new Order();
+        marketOrder1.setExecutionType(ExecutionType.MARKET);
+        double sl = imbalance.getEndPrice();
+
+        double tp = 0;
+        switch (imbalance.getType()) {
+            case UP -> {
+                marketOrder1.setType(OrderType.SHORT);
+                tp = imbalance.getEndPrice() - FIRST_TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                sl += imbalanceSize * STOP_LOSS_MODIFICATOR;
+            }
+            case DOWN -> {
+                marketOrder1.setType(OrderType.LONG);
+                tp = imbalance.getEndPrice() + FIRST_TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                sl -= imbalanceSize * STOP_LOSS_MODIFICATOR;
+            }
+        }
+        marketOrder1.setTP_SL(tp, sl);
+        marketOrder1.setCreateTime(currentTime);
+        marketOrder1.setMoneyAmount(account.calculatePositionSize());
+
+        if (TWO_TAKES) {
+            Order marketOrder2 = new Order();
+            marketOrder2.setExecutionType(ExecutionType.MARKET);
+            sl = imbalance.getEndPrice();
+
+            tp = 0;
+            switch (imbalance.getType()) {
+                case UP -> {
+                    marketOrder2.setType(OrderType.SHORT);
+                    tp = imbalance.getEndPrice() - SECOND_TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                    sl += imbalanceSize * STOP_LOSS_MODIFICATOR;
+                }
+                case DOWN -> {
+                    marketOrder2.setType(OrderType.LONG);
+                    tp = imbalance.getEndPrice() + SECOND_TAKE_PROFIT_THRESHOLD * imbalanceSize;
+                    sl -= imbalanceSize * STOP_LOSS_MODIFICATOR;
+                }
+            }
+            marketOrder2.setTP_SL(tp, sl);
+            marketOrder2.setCreateTime(currentTime);
+            marketOrder1.setMoneyAmount(0.5 * account.calculatePositionSize());
+            marketOrder2.setMoneyAmount(0.5 * account.calculatePositionSize());
+
+            simulator.submitOrder(marketOrder2, currentTime, currentEntry);
+        }
+        simulator.submitOrder(marketOrder1, currentTime, currentEntry);
     }
 }

@@ -1,6 +1,14 @@
 package org.bybittradeapp.backtest.domain;
 
+import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
+
 import java.io.Serializable;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
+import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Order implements Serializable {
 
@@ -46,13 +54,12 @@ public class Order implements Serializable {
      * Проверяет если лимитный ордер можно исполнить.
      * Возвращает ошибку если метод вызван на рыночном ордере.
      */
-    public boolean isExecutable(double currentPrice) {
+    public boolean isExecutable(MarketEntry currentEntry) {
         if (this.executionType == ExecutionType.LIMIT) {
-            if (this.type == OrderType.LONG) {
-                return this.executionPrice >= currentPrice;
-            } else {
-                return this.executionPrice <= currentPrice;
-            }
+            return switch (this.type) {
+                case LONG -> this.executionPrice >= currentEntry.low();
+                case SHORT -> this.executionPrice <= currentEntry.high();
+            };
         } else {
             throw new RuntimeException("Market order executes at create time. It cannot be executable or not.");
         }
@@ -114,6 +121,16 @@ public class Order implements Serializable {
 
     public void setMoneyAmount(double moneyAmount) {
         this.moneyAmount = moneyAmount;
+    }
+
+    @Override
+    public String toString() {
+        return "Order" + "\n" +
+                "   type :: " + type + "\n" +
+                "   moneyAmount :: " + String.format("%.2f", moneyAmount) + "\n" +
+                "   takeProfitPrice :: " + String.format("%.2f", takeProfitPrice) + "\n" +
+                "   stopLossPrice :: " + String.format("%.2f", stopLossPrice) + "\n" +
+                "   createTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(createTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n";
     }
 }
 

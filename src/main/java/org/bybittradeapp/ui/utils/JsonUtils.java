@@ -7,37 +7,37 @@ import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
+import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.ui.domain.MarketKlineEntry;
 import org.bybittradeapp.analysis.domain.Extremum;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Optional;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
-import static org.bybittradeapp.Main.mapper;
+import static org.bybittradeapp.Main.MAPPER;
 
 /**
  * Временный класс только для отображения в UI
  */
 public class JsonUtils {
     public static final String DATA_JSON_FILE_PATH = "/home/dmitriy/Projects/trading-vue-js/data/data.json";
-    public static final long ZONE_DELAY_MILLS = 10800000L;
 
     private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/positions/");
     private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances/");
     private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/extremums/");
 
-    public static void updateMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
-        Log.log("ohlcv with:");
-        Log.log(uiMarketData.size() + " uiMarketData");
+    public static void updateUiMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
+        Log.debug("ohlcv with:");
+        Log.debug(uiMarketData.size() + " uiMarketData");
 
-        final ArrayNode ohlcv = mapper.createArrayNode();
+        final ArrayNode ohlcv = MAPPER.createArrayNode();
         uiMarketData.forEach((key, value) -> {
-            ArrayNode entryNode = mapper.createArrayNode();
-            entryNode.add(value.getStartTime() + ZONE_DELAY_MILLS);
+            ArrayNode entryNode = MAPPER.createArrayNode();
+            entryNode.add(value.getStartTime());
             entryNode.add(value.getOpenPrice());
             entryNode.add(value.getHighPrice());
             entryNode.add(value.getLowPrice());
@@ -47,33 +47,68 @@ public class JsonUtils {
 
         try {
             File file = new File(DATA_JSON_FILE_PATH);
-            JsonNode rootNode = mapper.readTree(file);
+            JsonNode rootNode = MAPPER.readTree(file);
 
             if (rootNode.has("ohlcv")) {
                 ((ObjectNode) rootNode).set("ohlcv", ohlcv);
-            } else {
-                ((ObjectNode) rootNode).putIfAbsent("ohlcv", ohlcv);
             }
             if (rootNode.has("onchart")) {
-                ((ObjectNode) rootNode).set("onchart", mapper.createArrayNode());
+                ((ObjectNode) rootNode).set("onchart", MAPPER.createArrayNode());
             }
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
+            MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            Log.log("error updateMarketData: " + e.getMessage());
+            Log.debug("updateMarketData throws exception: " +
+                    e.getMessage() + "\n" +
+                    Arrays.toString(e.getStackTrace()));
+            throw new RuntimeException(e);
         }
     }
 
-    public static void updateAnalysedData(List<Extremum> extrema,
-                                          List<Imbalance> imbalances,
-                                          List<Position> positions,
-                                          TreeMap<Long, MarketKlineEntry> uiMarketData) {
-        Log.log("onchart with:");
-        Log.log(extrema.size() + " zones");
-        Log.log(imbalances.size() + " imbalances");
-        Log.log(positions.size() + " positions");
+    public static void updateMarketData(TreeMap<Long, MarketEntry> marketData) {
+        var secondsMarketKLineEntries = getUiDataFromMarketEntries(marketData);
+        JsonUtils.updateUiMarketData(secondsMarketKLineEntries);
+    }
 
-        final ArrayNode onchart = mapper.createArrayNode();
+    @NotNull
+    private static TreeMap<Long, MarketKlineEntry> getUiDataFromMarketEntries(TreeMap<Long, MarketEntry> marketData) {
+        return marketData
+                .entrySet()
+                .stream()
+                .map(entry -> {
+                    var uiEntry = new MarketKlineEntry();
+                    uiEntry.setStartTime(entry.getKey());
+                    uiEntry.setLowPrice(entry.getValue().low());
+                    uiEntry.setHighPrice(entry.getValue().high());
+                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+                    return uiEntry;
+                })
+                .collect(Collectors.toMap(
+                        MarketKlineEntry::getStartTime,
+                        Function.identity(),
+                        (first, second) -> first,
+                        TreeMap::new
+                ));
+    }
+
+    public static void updateAnalysedData(List<Extremum> extrema,
+                                            List<Imbalance> imbalances,
+                                            List<Position> positions,
+                                            TreeMap<Long, MarketEntry> marketData) {
+        updateAnalysedUiData(extrema, imbalances, positions, getUiDataFromMarketEntries(marketData));
+    }
+
+    public static void updateAnalysedUiData(List<Extremum> extrema,
+                                            List<Imbalance> imbalances,
+                                            List<Position> positions,
+                                            TreeMap<Long, MarketKlineEntry> uiMarketData) {
+        Log.debug("onchart with:");
+        Log.debug(extrema.size() + " zones");
+        Log.debug(imbalances.size() + " imbalances");
+        Log.debug(positions.size() + " positions");
+
+        final ArrayNode onchart = MAPPER.createArrayNode();
 
         if (uiMarketData.isEmpty()) {
             return;
@@ -92,17 +127,20 @@ public class JsonUtils {
 
         try {
             File file = new File(DATA_JSON_FILE_PATH);
-            JsonNode rootNode = mapper.readTree(file);
+            JsonNode rootNode = MAPPER.readTree(file);
 
             if (rootNode.has("onchart")) {
                 ((ObjectNode) rootNode).set("onchart", onchart);
             } else {
                 ((ObjectNode) rootNode).putIfAbsent("onchart", onchart);
             }
-            mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
+            MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            Log.log("error updateAnalysedData: " + e.getMessage());
+            Log.debug("updateAnalysedUiData throws exception: " +
+                    e.getMessage() + "\n" +
+                    Arrays.toString(e.getStackTrace()));
+            throw new RuntimeException(e);
         }
     }
 
@@ -113,17 +151,17 @@ public class JsonUtils {
         for (Imbalance imbalance : imbalances) {
             Optional<Long> startTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime_ -> startTime_ < imbalance.getStartTime() + ZONE_DELAY_MILLS)
+                    .filter(startTime_ -> startTime_ < imbalance.getStartTime())
                     .max(Comparator.comparing(Long::longValue));
 
             Optional<Long> endTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(endTime_ -> endTime_ > imbalance.getEndTime() + ZONE_DELAY_MILLS)
+                    .filter(endTime_ -> endTime_ > imbalance.getEndTime())
                     .min(Comparator.comparing(Long::longValue));
 
             Optional<Long> completeTime = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime() + ZONE_DELAY_MILLS)
+                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime())
                     .min(Comparator.comparing(Long::longValue));
 
             if (startTime.isEmpty() || endTime.isEmpty() || completeTime.isEmpty()) {
@@ -132,59 +170,47 @@ public class JsonUtils {
 
             String color = imbalance.getType() == Imbalance.Type.UP ? "#002d9e" : "#b8077d";
 
-            ArrayNode p1NodeUp = mapper.createArrayNode();
+            ArrayNode p1NodeUp = MAPPER.createArrayNode();
             p1NodeUp.add(startTime.get());
             p1NodeUp.add(imbalance.getStartPrice());
 
-            ArrayNode p2NodeUp = mapper.createArrayNode();
+            ArrayNode p2NodeUp = MAPPER.createArrayNode();
             p2NodeUp.add(endTime.get());
             p2NodeUp.add(imbalance.getStartPrice());
 
-            ArrayNode dataCombinesCount = mapper.createArrayNode();
-            ArrayNode dataCombinesCount2 = mapper.createArrayNode();
-            dataCombinesCount2.add(endTime.get());
-            dataCombinesCount2.add(imbalance.getCombinesCount());
-            dataCombinesCount.add(dataCombinesCount2);
-
             Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
-            Segment segmentUp = new Segment("imb: combines", "Segment", dataCombinesCount, settingsUp);
+            Segment segmentUp = new Segment("", "Segment", MAPPER.createArrayNode(), settingsUp);
 
-            ObjectNode segmentNodeUp = mapper.valueToTree(segmentUp);
+            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
             onchart.add(segmentNodeUp);
 
-            ArrayNode p1NodeStart = mapper.createArrayNode();
+            ArrayNode p1NodeStart = MAPPER.createArrayNode();
             p1NodeStart.add(startTime.get());
             p1NodeStart.add(imbalance.getEndPrice());
 
-            ArrayNode p2NodeEnd = mapper.createArrayNode();
+            ArrayNode p2NodeEnd = MAPPER.createArrayNode();
             p2NodeEnd.add(endTime.get());
             p2NodeEnd.add(imbalance.getEndPrice());
 
-            ArrayNode dataCompletesCount = mapper.createArrayNode();
-            ArrayNode dataCompletesCount2 = mapper.createArrayNode();
-            dataCompletesCount2.add(startTime.get());
-            dataCompletesCount2.add(imbalance.getCompletesCount());
-            dataCompletesCount.add(dataCompletesCount2);
+            Settings settingsDown = new Settings(p1NodeStart, p2NodeEnd, 10, color);
+            Segment segmentDown = new Segment("", "Segment", MAPPER.createArrayNode(), settingsDown);
 
-            Settings settingsDown = new Settings(p1NodeStart, p2NodeEnd, 15, color);
-            Segment segmentDown = new Segment("imb: completes", "Segment", dataCompletesCount, settingsDown);
-
-            ObjectNode segmentNodeDown = mapper.valueToTree(segmentDown);
+            ObjectNode segmentNodeDown = MAPPER.valueToTree(segmentDown);
             onchart.add(segmentNodeDown);
 
-            ArrayNode p1NodeComplete = mapper.createArrayNode();
-            p1NodeComplete.add(startTime.get());
+            ArrayNode p1NodeComplete = MAPPER.createArrayNode();
+            p1NodeComplete.add(endTime.get());
             p1NodeComplete.add(imbalance.getCompletePrice());
 
-            ArrayNode p2NodeComplete = mapper.createArrayNode();
+            ArrayNode p2NodeComplete = MAPPER.createArrayNode();
             p2NodeComplete.add(completeTime.get());
             p2NodeComplete.add(imbalance.getCompletePrice());
 
-            Settings settingsComplete = new Settings(p1NodeComplete, p2NodeComplete, 5, color);
-            Segment segmentComplete = new Segment("completed", "Segment", mapper.createArrayNode(), settingsComplete);
+            Settings settingsComplete = new Settings(p1NodeComplete, p2NodeComplete, 10, color);
+            Segment segmentComplete = new Segment("completed", "Segment", MAPPER.createArrayNode(), settingsComplete);
 
-            ObjectNode segmentNodeComplete = mapper.valueToTree(segmentComplete);
-//            onchart.add(segmentNodeComplete);
+            ObjectNode segmentNodeComplete = MAPPER.valueToTree(segmentComplete);
+            onchart.add(segmentNodeComplete);
         }
     }
 
@@ -195,12 +221,12 @@ public class JsonUtils {
         for (Position position : positions) {
             Optional<Long> timeLeft = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime < position.getOpenTime() + ZONE_DELAY_MILLS)
+                    .filter(startTime -> startTime < position.getOpenTime())
                     .max(Comparator.comparing(Long::longValue));
 
             Optional<Long> timeRight = uiMarketData.values().stream()
                     .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime > position.getCloseTime() + ZONE_DELAY_MILLS)
+                    .filter(startTime -> startTime > position.getCloseTime())
                     .min(Comparator.comparing(Long::longValue));
             if (timeRight.isEmpty() || timeLeft.isEmpty()) {
                 continue;
@@ -209,32 +235,32 @@ public class JsonUtils {
             String openColor = position.getOrder().getType() == OrderType.LONG ? "#21ba02" : "#db0602";
             String closeColor = position.getOrder().getType() == OrderType.LONG ? "#0f5202" : "#590301";
 
-            ArrayNode p1NodeUp = mapper.createArrayNode();
+            ArrayNode p1NodeUp = MAPPER.createArrayNode();
             p1NodeUp.add(timeLeft.get());
             p1NodeUp.add(position.getOpenPrice());
 
-            ArrayNode p2NodeUp = mapper.createArrayNode();
+            ArrayNode p2NodeUp = MAPPER.createArrayNode();
             p2NodeUp.add(timeRight.get());
             p2NodeUp.add(position.getOpenPrice());
 
             Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, openColor);
-            Segment segmentUp = new Segment("pos", "Segment", mapper.createArrayNode(), settingsUp);
+            Segment segmentUp = new Segment("pos", "Segment", MAPPER.createArrayNode(), settingsUp);
 
-            ObjectNode segmentNodeUp = mapper.valueToTree(segmentUp);
+            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
             onchart.add(segmentNodeUp);
 
-            ArrayNode p1NodeDown = mapper.createArrayNode();
+            ArrayNode p1NodeDown = MAPPER.createArrayNode();
             p1NodeDown.add(timeLeft.get());
             p1NodeDown.add(position.getClosePrice());
 
-            ArrayNode p2NodeDown = mapper.createArrayNode();
+            ArrayNode p2NodeDown = MAPPER.createArrayNode();
             p2NodeDown.add(timeRight.get());
             p2NodeDown.add(position.getClosePrice());
 
             Settings settingsDown = new Settings(p1NodeDown, p2NodeDown, 5, closeColor);
-            Segment segmentDown = new Segment("pos", "Segment", mapper.createArrayNode(), settingsDown);
+            Segment segmentDown = new Segment("pos", "Segment", MAPPER.createArrayNode(), settingsDown);
 
-            ObjectNode segmentNodeDown = mapper.valueToTree(segmentDown);
+            ObjectNode segmentNodeDown = MAPPER.valueToTree(segmentDown);
             onchart.add(segmentNodeDown);
         }
     }
@@ -246,7 +272,7 @@ public class JsonUtils {
         for (Extremum extremum : extrema) {
 
             MarketKlineEntry time = uiMarketData.values().stream()
-                    .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp() + ZONE_DELAY_MILLS)))
+                    .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp())))
                     .orElse(null);
 
             if (time == null || uiMarketData.values().stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 8L * 60L * 60L * 1000L)) {
@@ -255,18 +281,18 @@ public class JsonUtils {
 
             String color = extremum.getType() == Extremum.Type.MAX ? "#23a776" : "#e54150";
 
-            ArrayNode p1NodeUp = mapper.createArrayNode();
+            ArrayNode p1NodeUp = MAPPER.createArrayNode();
             p1NodeUp.add(time.getStartTime());
             p1NodeUp.add(extremum.getPrice());
 
-            ArrayNode p2NodeUp = mapper.createArrayNode();
+            ArrayNode p2NodeUp = MAPPER.createArrayNode();
             p2NodeUp.add(time.getStartTime() + 8L * 60L * 60L * 1000L);
             p2NodeUp.add(extremum.getPrice());
 
             Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
-            Segment segmentUp = new Segment("zone", "Segment", mapper.createArrayNode(), settingsUp);
+            Segment segmentUp = new Segment("zone", "Segment", MAPPER.createArrayNode(), settingsUp);
 
-            ObjectNode segmentNodeUp = mapper.valueToTree(segmentUp);
+            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
             onchart.add(segmentNodeUp);
         }
     }
@@ -285,6 +311,7 @@ public class JsonUtils {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public static<T> List<T> deserialize(Class<T> clazz) {
         if (clazz == Imbalance.class) {
             return (List<T>) imbalanceSerializer.deserialize();

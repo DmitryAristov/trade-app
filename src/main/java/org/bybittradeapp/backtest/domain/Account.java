@@ -1,9 +1,11 @@
 package org.bybittradeapp.backtest.domain;
 
+import org.bybittradeapp.logging.Log;
+
 public class Account {
     private static final int BALANCE = 10000;
-    private static final double RISK_LEVEL = 65.0;
-    private static final int CREDIT_LEVEL = 5;
+    private static final double RISK_LEVEL = 90.0;
+    private static final int CREDIT_LEVEL = 4;
 
     private double balance;
     private final double riskPercentage;
@@ -13,6 +15,8 @@ public class Account {
         this.balance = BALANCE;
         this.riskPercentage = RISK_LEVEL;
         this.credit = CREDIT_LEVEL;
+        Log.info(String.format("account parameters:\n    balance :: %d\n    risk :: %.2f\n    credit :: %d",
+                BALANCE, RISK_LEVEL, CREDIT_LEVEL));
     }
 
     public double getBalance() {
@@ -37,6 +41,7 @@ public class Account {
         } else {
             this.balance += position.getProfitLoss() - position.getCloseFee();
         }
+        Log.debug(String.format("balance updated: %.2f", this.balance));
     }
 }
 

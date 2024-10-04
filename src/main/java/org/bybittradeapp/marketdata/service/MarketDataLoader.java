@@ -56,9 +56,9 @@ public class MarketDataLoader<T extends TreeMap<Long, ? extends Object>> {
         Long latestSavedElement = null;
         if (!data.isEmpty()) {
             latestSavedElement = data.lastKey();
-            Log.log(String.format("found %d (%.2f%%) of %d. Latest was %s", data.size(), progress * 100., fullSize, Instant.ofEpochMilli(latestSavedElement)));
+            Log.debug(String.format("found %d (%.2f%%) of %d. Latest was %s", data.size(), progress * 100., fullSize, Instant.ofEpochMilli(latestSavedElement)));
         } else {
-            Log.log(String.format("saved rows not found. Size to get %d", fullSize));
+            Log.debug(String.format("saved rows not found. Size to get %d", fullSize));
         }
 
         getDataProcess(latestSavedElement);
