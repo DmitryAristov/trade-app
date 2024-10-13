@@ -26,16 +26,13 @@ public class Analyser {
     private final TrendService trendService;
     private final ExtremumService extremumService;
     private final Serializer<List<TreeMap<Long, MarketEntry>>> serializer =
-            new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances/market-data/");
-
+            new Serializer<>("/src/main/resources/results/imbalances/market-data/");
 
     public Analyser(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
         this.uiMarketData = uiMarketData;
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
-        this.imbalanceService.setMarketData(marketData);
-
         this.trendService = new TrendService();
         this.extremumService = new ExtremumService();
 

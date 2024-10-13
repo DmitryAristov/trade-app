@@ -1,5 +1,6 @@
 package org.bybittradeapp.backtest.domain;
 
+import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 
@@ -33,6 +34,7 @@ public class Order implements Serializable {
     private double takeProfitPrice = -1;
     private double stopLossPrice = -1;
     private long createTime;
+    private Imbalance imbalance;
 
     public Order() { }
 
@@ -123,14 +125,29 @@ public class Order implements Serializable {
         this.moneyAmount = moneyAmount;
     }
 
+    public void setImbalance(Imbalance imbalance) {
+        this.imbalance = imbalance;
+    }
+
+    public Imbalance getImbalance() {
+        return imbalance;
+    }
+
     @Override
     public String toString() {
-        return "Order" + "\n" +
-                "   type :: " + type + "\n" +
-                "   moneyAmount :: " + String.format("%.2f", moneyAmount) + "\n" +
-                "   takeProfitPrice :: " + String.format("%.2f", takeProfitPrice) + "\n" +
-                "   stopLossPrice :: " + String.format("%.2f", stopLossPrice) + "\n" +
-                "   createTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(createTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n";
+        return String.format("""
+                        Order
+                           type :: %s
+                           moneyAmount :: %.2f
+                           takeProfitPrice :: %.2f
+                           stopLossPrice :: %.2f
+                           createTime :: %s
+                        """,
+                type,
+                moneyAmount,
+                takeProfitPrice,
+                stopLossPrice,
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(createTime), ZoneOffset.UTC).format(DATETIME_FORMATTER));
     }
 }
 

@@ -18,7 +18,7 @@ public class Serializer<T> {
     }
 
     public void serialize(T data) {
-        try (FileOutputStream fileOutputStream = new FileOutputStream(path + SYMBOL);
+        try (FileOutputStream fileOutputStream = new FileOutputStream(System.getProperty("user.dir") + path + SYMBOL);
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(fileOutputStream)
         ) {
             Log.debug("serializing...");
@@ -40,7 +40,7 @@ public class Serializer<T> {
 
     @SuppressWarnings("unchecked")
     public T deserialize() {
-        try (FileInputStream fileInputStream = new FileInputStream(path + SYMBOL);
+        try (FileInputStream fileInputStream = new FileInputStream(System.getProperty("user.dir") + path + SYMBOL);
              ObjectInputStream objectInputStream = new ObjectInputStream(fileInputStream)
         ) {
             Log.debug("deserializing...");

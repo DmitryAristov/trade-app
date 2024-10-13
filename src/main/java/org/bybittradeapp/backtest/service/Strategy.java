@@ -12,7 +12,9 @@ import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.JsonUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -41,10 +43,10 @@ public class Strategy {
      *          При SHORT сделке первый тейк будет выставлен на 59000 - 4000 * 0.4 = 57400$.
      */
     private static final double FIRST_TAKE_PROFIT_THRESHOLD = 0.5;
-    private static final double SECOND_TAKE_PROFIT_THRESHOLD = 1.;
+    private static final double SECOND_TAKE_PROFIT_THRESHOLD = 0.75;
     private static final double STOP_LOSS_MODIFICATOR = 0.01;
-    private static final double MAX_VALID_IMBALANCE_PART_FOR_POSITION = 0.2;
     private static final boolean TWO_TAKES = true;
+    private static final long POSITION_LIVE_TIME = 20 * 60_000L;
 
     private final ExchangeSimulator simulator;
     private final TreeMap<Long, MarketEntry> marketData;
@@ -67,15 +69,21 @@ public class Strategy {
         this.extremumService = extremumService;
         this.trendService = trendService;
         this.account = account;
-        Log.info(String.format("strategy parameters:\n    firstTake :: %.2f\n    secondTake :: %.2f\n    stopModificator :: %.2f\n    maxValidImbSize :: %.2f\n    2_takes :: %b",
-                FIRST_TAKE_PROFIT_THRESHOLD, SECOND_TAKE_PROFIT_THRESHOLD, STOP_LOSS_MODIFICATOR, MAX_VALID_IMBALANCE_PART_FOR_POSITION, TWO_TAKES));
+        Log.info(String.format("""
+                        strategy parameters:
+                            two takes :: %b
+                            first take :: %.2f
+                            second take :: %.2f
+                            stop modificator :: %.2f
+                            position live time :: %d""",
+                TWO_TAKES,
+                FIRST_TAKE_PROFIT_THRESHOLD,
+                SECOND_TAKE_PROFIT_THRESHOLD,
+                STOP_LOSS_MODIFICATOR,
+                POSITION_LIVE_TIME));
     }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
-
-        //TODO(1) Отслеживать был ли взят имбаланс. Если нет -> брать принудительно если цена еще не сильно вернулась обратно.
-        // Переписать имбаланс сервис так чтобы при поиске имбаланса использовались только минутные данные.
-        // Основное время программа ищет имбаланс и нет нужды в секундных данных.
 
         switch (state) {
             case WAIT_IMBALANCE -> {
@@ -94,9 +102,12 @@ public class Strategy {
                  *    yes - change state to POSSIBLE_ENTRY_POINT
                  *    no - { return without state change }
                  */
-                if (imbalanceService.getCurrentState() == ImbalanceState.COMPLETED) {
-                    openPositions(currentTime, currentEntry);
-                    state = State.POSITIONS_OPENED;
+                if (imbalanceService.getCurrentState() == ImbalanceState.POTENTIAL_END_POINT) {
+                    if (openPositions(currentTime, currentEntry)) {
+                        state = State.POSITIONS_OPENED;
+                    } else {
+                        state = State.WAIT_IMBALANCE;
+                    }
                 }
             }
             case POSITIONS_OPENED -> {
@@ -108,7 +119,11 @@ public class Strategy {
                  *    no - { return without state change }
                  */
                 List<Position> positions = simulator.getOpenPositions();
+                closeByTimeout(currentTime, currentEntry, positions);
+
+                positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
+//                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 } else if (positions.size() == 1) {
                     Position position = positions.get(0);
@@ -120,27 +135,29 @@ public class Strategy {
             }
             case WAIT_POSITIONS_CLOSED -> {
                 List<Position> positions = simulator.getOpenPositions();
+                closeByTimeout(currentTime, currentEntry, positions);
+
+                positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
+//                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 }
             }
         }
     }
 
-    private void openPositions(long currentTime, MarketEntry currentEntry) {
+    private boolean openPositions(long currentTime, MarketEntry currentEntry) {
         if (!simulator.getOpenPositions().isEmpty()) {
             throw new RuntimeException("Trying to open position while already opened " + simulator.getOpenPositions().size());
         }
 
         Imbalance imbalance = imbalanceService.getCurrentImbalance();
         double imbalanceSize = imbalance.size();
-        boolean lowerThanTenPercentsOfImbalanceSize = Math.abs(imbalance.getEndPrice() - currentEntry.average()) / imbalanceSize < MAX_VALID_IMBALANCE_PART_FOR_POSITION;
-        if (!lowerThanTenPercentsOfImbalanceSize) {
-            return;
-        }
+
         Log.debug("imbalance when open position :: " + imbalance);
 
         Order marketOrder1 = new Order();
+        marketOrder1.setImbalance(imbalance);
         marketOrder1.setExecutionType(ExecutionType.MARKET);
         double sl = imbalance.getEndPrice();
 
@@ -187,5 +204,31 @@ public class Strategy {
             simulator.submitOrder(marketOrder2, currentTime, currentEntry);
         }
         simulator.submitOrder(marketOrder1, currentTime, currentEntry);
+        return true;
+    }
+
+    private void closeByTimeout(long currentTime, MarketEntry currentEntry, List<Position> positions) {
+        positions.forEach(position -> {
+            if (currentTime - position.getOpenTime() > POSITION_LIVE_TIME) {
+                Log.debug(String.format("close positions with timeout %d minutes", POSITION_LIVE_TIME / 60_000L));
+                position.close(currentTime, currentEntry.average());
+                account.updateBalance(position);
+            }
+        });
+    }
+
+    private void updateUI(long currentTime) {
+        if (simulator.getPositions().size() >= 2) {
+            List<Position> positions = List.of(simulator.getPositions().get(simulator.getPositions().size() - 1),
+                    simulator.getPositions().get(simulator.getPositions().size() - 2));
+
+            long delay = 10 * 60L * 1000L;
+            Imbalance imbalance = positions.get(0).getOrder().getImbalance();
+            var marketData__ = new TreeMap<>(marketData.subMap(imbalance.getStartTime() - delay, currentTime + delay));
+            JsonUtils.updateMarketData(marketData__);
+            JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), positions, marketData__);
+
+            System.out.print("");
+        }
     }
 }

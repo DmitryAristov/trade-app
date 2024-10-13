@@ -154,15 +154,25 @@ public class Position implements Serializable {
 
     @Override
     public String toString() {
-        return "Position" + "\n" +
-                "   amountInBTC :: " + String.format("%.4f", amountInBTC) + "\n" +
-                "   openTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
-                "   openPrice :: " + String.format("%.2f", openPrice) + "\n" +
-                "   openFee :: " + String.format("%.2f", openFee) + "\n" +
-                "   closePrice :: " + String.format("%.2f", closePrice) + "\n" +
-                "   closeFee :: " + String.format("%.2f", closeFee) + "\n" +
-                "   takeProfitPrice :: " + String.format("%.2f", takeProfitPrice) + "\n" +
-                "   stopLossPrice :: " + String.format("%.2f", stopLossPrice) + "\n";
+        return String.format("""
+                        Position
+                           amountInBTC :: %.4f
+                           openTime :: %s
+                           openPrice :: %.2f
+                           openFee :: %.2f
+                           closePrice :: %.2f
+                           closeFee :: %.2f
+                           takeProfitPrice :: %.2f
+                           stopLossPrice :: %.2f
+                        """,
+                amountInBTC,
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                openPrice,
+                openFee,
+                closePrice,
+                closeFee,
+                takeProfitPrice,
+                stopLossPrice);
     }
 }
 

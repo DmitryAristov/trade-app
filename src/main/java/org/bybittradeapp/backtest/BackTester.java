@@ -1,9 +1,6 @@
 package org.bybittradeapp.backtest;
 
-import org.bybittradeapp.analysis.service.ExtremumService;
-import org.bybittradeapp.analysis.service.ImbalanceService;
-import org.bybittradeapp.analysis.service.TrendService;
-import org.bybittradeapp.analysis.service.VolatilityService;
+import org.bybittradeapp.analysis.service.*;
 import org.bybittradeapp.backtest.domain.Account;
 import org.bybittradeapp.backtest.service.ExchangeSimulator;
 import org.bybittradeapp.backtest.service.Strategy;
@@ -43,7 +40,6 @@ public class BackTester {
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
-        this.imbalanceService.setMarketData(marketData);
 
         this.trendService = new TrendService();
         this.extremumService = new ExtremumService();
@@ -71,8 +67,8 @@ public class BackTester {
         });
         Log.info(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
-        JsonUtils.updateUiMarketData(uiMarketData);
-        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
+//        JsonUtils.updateUiMarketData(uiMarketData);
+//        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions());
     }
 }

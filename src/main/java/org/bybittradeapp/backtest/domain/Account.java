@@ -4,8 +4,8 @@ import org.bybittradeapp.logging.Log;
 
 public class Account {
     private static final int BALANCE = 10000;
-    private static final double RISK_LEVEL = 90.0;
-    private static final int CREDIT_LEVEL = 4;
+    private static final double RISK_LEVEL = 50.0;
+    private static final int CREDIT_LEVEL = 12;
 
     private double balance;
     private final double riskPercentage;

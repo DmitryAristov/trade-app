@@ -26,9 +26,9 @@ import static org.bybittradeapp.Main.MAPPER;
 public class JsonUtils {
     public static final String DATA_JSON_FILE_PATH = "/home/dmitriy/Projects/trading-vue-js/data/data.json";
 
-    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/positions/");
-    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/imbalances/");
-    private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/results/extremums/");
+    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/src/main/resources/results/positions/");
+    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/src/main/resources/results/imbalances/");
+    private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/src/main/resources/results/extremums/");
 
     public static void updateUiMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
         Log.debug("ohlcv with:");

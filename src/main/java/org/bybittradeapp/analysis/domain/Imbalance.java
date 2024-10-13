@@ -88,16 +88,26 @@ public class Imbalance implements Serializable {
         };
     }
 
+    public long timeSize() {
+        return endTime - startTime;
+    }
+
     public double speed() {
-        return size() / (endTime - startTime);
+        return size() / timeSize();
     }
 
     @Override
     public String toString() {
-        return "Imbalance" + "\n" +
-                "   startTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
-                "   startPrice :: " + startPrice + "\n" +
-                "   endTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(endTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
-                "   endPrice :: " + endPrice + "\n";
+        return String.format("""
+                        Imbalance
+                           startTime :: %s
+                           startPrice :: %.2f
+                           endTime :: %s
+                           endPrice :: %.2f
+                        """,
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                startPrice,
+                LocalDateTime.ofInstant(Instant.ofEpochMilli(endTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                endPrice);
     }
 }

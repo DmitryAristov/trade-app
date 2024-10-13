@@ -20,7 +20,7 @@ public class Log {
 
     public static final long PROGRESS_LOG_STEP = 30000L;
     public static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-    public static final String LOG_FILE_PATH = "/home/dmitriy/Projects/bybit-trade-app/src/main/resources/logs/output.log";
+    public static final String LOG_FILE_PATH = System.getProperty("user.dir") + "/src/main/resources/logs/output.log";
 
     public static void debug(String message) {
         log(message, Level.DEBUG);

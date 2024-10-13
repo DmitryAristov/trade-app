@@ -12,8 +12,28 @@ import org.bybittradeapp.ui.utils.Serializer;
 
 import java.util.TreeMap;
 
+/**TODO
+ *  <li>попробовать брать если быстро вернулось на 20% обратно и сам имбаланс быстрый (то есть брать не по времени, а по скорости возврата обратно от размера имбаланса)</li>
+ *  <li>если скоростной и равномерный - то по возврату</li>
+ *  <li>уменьшить скорость и увеличить минимальный размер (потестировать)</li>
+ *  <li>скачать volume</li>
+ */
 public class Main {
-    public static String PEZDA = "\n" + "\n" + "\n" + "           -----------------------------------\n" + "      ---------------------------------------------\n" + "  -----------------------------------------------------\n" + "----------                                     ----------\n" + "----------                                     ----------\n" + "  -----------------------------------------------------\n" + "      ---------------------------------------------\n" + "           -----------------------------------\n" + "\n" + "\n";
+    public static String PEZDA = """
+            
+            
+            
+                       -----------------------------------
+                  ---------------------------------------------
+              -----------------------------------------------------
+            ----------                                     ----------
+            ----------                                     ----------
+              -----------------------------------------------------
+                  ---------------------------------------------
+                       -----------------------------------
+            
+            
+            """;
     public static final ObjectMapper MAPPER = new ObjectMapper();
     public static final Log.Level LOG_LEVEL = Log.Level.INFO;
 
@@ -30,11 +50,11 @@ public class Main {
     }
 
     private static final MarketDataLoader<TreeMap<Long, MarketKlineEntry>> uiMarketDataLoader = new MarketDataLoader<>(
-            new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/ui-data/"),
+            new Serializer<>("/src/main/resources/ui-data/"),
             ExchangeRequestService.toMills(UI_DATA_INTERVAL),
             ExchangeRequestService::performBybitMarketDataRequest);
     private static final MarketDataLoader<TreeMap<Long, MarketEntry>> analyseMarketDataLoader = new MarketDataLoader<>(
-            new Serializer<>("/home/dmitriy/Projects/bybit-trade-app/src/main/resources/market-data/"),
+            new Serializer<>("/src/main/resources/market-data/"),
             1000L,
             ExchangeRequestService::performBinanceMarketDataRequest);
 
