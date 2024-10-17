@@ -27,7 +27,7 @@ public class ImbalanceService implements VolatilityListener {
      * Константы для расчета минимальной скорости и цены.
      * Формула: минимальная цена/скорость = [средняя цена] * [волатильность] * [константа]
      */
-    private static final double SPEED_MODIFICATOR = 2E-7, PRICE_MODIFICATOR = 0.015;
+    private static final double SPEED_MODIFICATOR = 1E-7, PRICE_MODIFICATOR = 0.02;
 
     private static final double MAX_VALID_IMBALANCE_PART_FOR_POSITION = 0.2;
     private static final int MIN_IMBALANCE_TIME_SIZE = 4;
