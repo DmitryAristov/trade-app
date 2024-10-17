@@ -31,7 +31,6 @@ public class BackTester {
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
     private final TrendService trendService;
-    private final ExtremumService extremumService;
 
     public BackTester(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
@@ -40,13 +39,11 @@ public class BackTester {
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
-
         this.trendService = new TrendService();
-        this.extremumService = new ExtremumService();
 
-        volatilityService.subscribeAll(List.of(this.imbalanceService, this.extremumService, this.trendService));
+        volatilityService.subscribeAll(List.of(this.imbalanceService, this.trendService));
 
-        this.strategy = new Strategy(simulator, marketData, imbalanceService, extremumService, trendService, account);
+        this.strategy = new Strategy(simulator, marketData, imbalanceService, trendService, account);
     }
 
     public void runTests() {
@@ -65,6 +62,7 @@ public class BackTester {
             double progress = ((double) (currentTime - firstKey)) / ((double) (lastKey - firstKey));
             logProgress(startTime, step, progress, "backtest");
         });
+        volatilityService.unsubscribeAll();
         Log.info(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
 //        JsonUtils.updateUiMarketData(uiMarketData);

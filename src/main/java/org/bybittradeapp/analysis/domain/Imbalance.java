@@ -1,7 +1,5 @@
 package org.bybittradeapp.analysis.domain;
 
-import org.bybittradeapp.logging.Log;
-
 import java.io.Serializable;
 import java.time.Instant;
 import java.time.LocalDateTime;

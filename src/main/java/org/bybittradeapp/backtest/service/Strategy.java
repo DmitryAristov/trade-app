@@ -2,7 +2,6 @@ package org.bybittradeapp.backtest.service;
 
 import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.analysis.domain.ImbalanceState;
-import org.bybittradeapp.analysis.service.ExtremumService;
 import org.bybittradeapp.analysis.service.ImbalanceService;
 import org.bybittradeapp.analysis.service.TrendService;
 import org.bybittradeapp.backtest.domain.Account;
@@ -51,7 +50,6 @@ public class Strategy {
     private final ExchangeSimulator simulator;
     private final TreeMap<Long, MarketEntry> marketData;
     private final ImbalanceService imbalanceService;
-    private final ExtremumService extremumService;
 
     private final TrendService trendService;
     private final Account account;
@@ -60,13 +58,11 @@ public class Strategy {
     public Strategy(ExchangeSimulator simulator,
                     TreeMap<Long, MarketEntry> marketData,
                     ImbalanceService imbalanceService,
-                    ExtremumService extremumService,
                     TrendService trendService,
                     Account account) {
         this.simulator = simulator;
         this.marketData = marketData;
         this.imbalanceService = imbalanceService;
-        this.extremumService = extremumService;
         this.trendService = trendService;
         this.account = account;
         Log.info(String.format("""
@@ -123,7 +119,7 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
-//                    updateUI(currentTime);
+                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 } else if (positions.size() == 1) {
                     Position position = positions.get(0);
@@ -139,7 +135,7 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
-//                    updateUI(currentTime);
+                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 }
             }
@@ -227,8 +223,6 @@ public class Strategy {
             var marketData__ = new TreeMap<>(marketData.subMap(imbalance.getStartTime() - delay, currentTime + delay));
             JsonUtils.updateMarketData(marketData__);
             JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), positions, marketData__);
-
-            System.out.print("");
         }
     }
 }

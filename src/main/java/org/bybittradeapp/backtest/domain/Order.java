@@ -1,7 +1,6 @@
 package org.bybittradeapp.backtest.domain;
 
 import org.bybittradeapp.analysis.domain.Imbalance;
-import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 
 import java.io.Serializable;

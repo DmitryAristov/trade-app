@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+@Deprecated(forRemoval = true)
 public class ExtremumService implements VolatilityListener {
     public static final long MIN_MAX_DETECT_ON_MARKET_DATA_TIME_WINDOW = 10L * 60L * 60L * 1000L;
     public static final long MIN_MAX_SEARCH_ON_MA_TIME_WINDOW = 100L * 60L * 1000L ;

@@ -19,7 +19,7 @@ import java.util.TreeMap;
  *  <li>скачать volume</li>
  */
 public class Main {
-    public static String PEZDA = """
+    public static final String PEZDA = """
             
             
             

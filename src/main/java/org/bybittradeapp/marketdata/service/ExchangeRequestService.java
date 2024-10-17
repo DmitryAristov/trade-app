@@ -25,7 +25,6 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.bybittradeapp.Main.*;
-import static org.bybittradeapp.Main.MAPPER;
 
 
 /**

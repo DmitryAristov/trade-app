@@ -129,4 +129,8 @@ public class VolatilityService {
     public void unsubscribe(VolatilityListener listener) {
         listeners.remove(listener);
     }
+
+    public void unsubscribeAll() {
+        listeners.clear();
+    }
 }
