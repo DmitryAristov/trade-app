@@ -72,12 +72,7 @@ public class Log {
         }
     }
 
-    public static void logProgress(
-            long startTime,
-            AtomicLong step,
-            double progress,
-            String operationName
-    ) {
+    public static void logProgress(long startTime, AtomicLong step, double progress, String operationName) {
         if (progress == 0) {
             return;
         }

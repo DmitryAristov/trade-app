@@ -10,6 +10,7 @@ import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.util.List;
 import java.util.TreeMap;
@@ -74,6 +75,9 @@ public class Strategy {
     }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
+        if (imbalanceService.getCurrentState() == ImbalanceState.COMPLETED) {
+            lastImbalance = imbalanceService.getCurrentImbalance();
+        }
 
         switch (state) {
             case WAIT_IMBALANCE -> {
@@ -82,6 +86,7 @@ public class Strategy {
                  *    yes - change state to ENTRY_POINT_SEARCH
                  *    no - { return without state change }
                  */
+                lastImbalance = null;
                 if (imbalanceService.getCurrentState() == ImbalanceState.PROGRESS) {
                     state = State.ENTRY_POINT_SEARCH;
                 }
@@ -113,6 +118,10 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
+                    if (lastImbalance != null) {
+                        updateUI(currentTime);
+                        System.out.print("");
+                    }
                     state = State.WAIT_IMBALANCE;
                 } else if (positions.size() == 1) {
                     Position position = positions.get(0);
@@ -128,6 +137,10 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
+                    if (lastImbalance != null) {
+                        updateUI(currentTime);
+                        System.out.print("");
+                    }
                     state = State.WAIT_IMBALANCE;
                 }
             }
@@ -204,4 +217,20 @@ public class Strategy {
             }
         });
     }
+
+    private void updateUI(long currentTime) {
+        List<Position> positions = simulator.getPositions();
+        List<Position> imbPositions = positions
+                .stream()
+                .filter(position ->
+                        position.getOpenTime() > lastImbalance.getStartTime() &&
+                                position.getOpenTime() < lastImbalance.getCompleteTime())
+                .toList();
+
+        long delay = 10 * 60L * 1000L;
+        JsonUtils.updateMarketData(new TreeMap<>(marketData.subMap(lastImbalance.getStartTime() - delay, currentTime + delay)));
+        JsonUtils.updateAnalysedData(List.of(lastImbalance), imbPositions);
+    }
+
+    Imbalance lastImbalance = null;
 }

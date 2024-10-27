@@ -8,14 +8,12 @@ import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.bybittradeapp.marketdata.service.MarketDataLoader;
 import org.bybittradeapp.marketdata.service.ExchangeRequestService;
-import org.bybittradeapp.ui.domain.MarketKlineEntry;
 import org.bybittradeapp.ui.utils.Serializer;
 
 import java.util.TreeMap;
 
 /**TODO
  *  <li>скачать volume</li>
- *  <li>!!!!     НУЖНО ВЫЯСНИТЬ ПОЧЕМУ ПОЛОВИНА ИМБАЛАНСОВ НЕ БЕРЕТСЯ     !!!!</li>
  */
 public class Main {
     public static final String PEZDA = """
@@ -48,18 +46,18 @@ public class Main {
         Log.info(PEZDA);
     }
 
-    private static final MarketDataLoader<TreeMap<Long, MarketKlineEntry>> uiMarketDataLoader = new MarketDataLoader<>(
-            new Serializer<>("/src/main/resources/ui-data/"),
-            ExchangeRequestService.toMills(UI_DATA_INTERVAL),
-            ExchangeRequestService::performBybitMarketDataRequest);
+//    private static final MarketDataLoader<TreeMap<Long, MarketKlineEntry>> uiMarketDataLoader = new MarketDataLoader<>(
+//            new Serializer<>("/src/main/resources/ui-data/"),
+//            ExchangeRequestService.toMills(UI_DATA_INTERVAL),
+//            ExchangeRequestService::performBybitMarketDataRequest);
     private static final MarketDataLoader<TreeMap<Long, MarketEntry>> analyseMarketDataLoader = new MarketDataLoader<>(
             new Serializer<>("/src/main/resources/market-data/"),
             1000L,
             ExchangeRequestService::performBinanceMarketDataRequest);
 
 
-    private static final BackTester tester = new BackTester(analyseMarketDataLoader.getData(), uiMarketDataLoader.getData());
-//    private static final Analyser analyser = new Analyser(analyseMarketDataLoader.getData(), uiMarketDataLoader.getData());
+    private static final BackTester tester = new BackTester(analyseMarketDataLoader.getData());
+//    private static final Analyser analyser = new Analyser(analyseMarketDataLoader.getData());
 
 
     public static void main(String[] args) {

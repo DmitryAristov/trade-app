@@ -14,7 +14,7 @@ public class Imbalance implements Serializable {
     private double endPrice;
     private long endTime;
     private long completeTime;
-    private double completePrice;
+    private double computedDuration;
 
     public Imbalance(long startTime, double startPrice, long endTime, double endPrice, Type type) {
         this.startTime = startTime;
@@ -68,12 +68,12 @@ public class Imbalance implements Serializable {
         this.completeTime = completeTime;
     }
 
-    public double getCompletePrice() {
-        return completePrice;
+    public double getComputedDuration() {
+        return computedDuration;
     }
 
-    public void setCompletePrice(double completePrice) {
-        this.completePrice = completePrice;
+    public void setComputedDuration(double computedDuration) {
+        this.computedDuration = computedDuration;
     }
 
     public double size() {

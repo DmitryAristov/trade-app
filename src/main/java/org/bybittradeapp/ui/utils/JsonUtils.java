@@ -1,5 +1,6 @@
 package org.bybittradeapp.ui.utils;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -14,6 +15,7 @@ import org.jetbrains.annotations.NotNull;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -30,7 +32,9 @@ public class JsonUtils {
     private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/src/main/resources/results/imbalances/");
     private static final Serializer<List<Extremum>> extremumSerializer = new Serializer<>("/src/main/resources/results/extremums/");
 
-    public static void updateUiMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
+    public static void updateMarketData(TreeMap<Long, MarketEntry> marketData) {
+        var uiMarketData = getUiDataFromMarketEntries(marketData);
+
         Log.debug("ohlcv with:");
         Log.debug(uiMarketData.size() + " uiMarketData");
 
@@ -65,11 +69,6 @@ public class JsonUtils {
         }
     }
 
-    public static void updateMarketData(TreeMap<Long, MarketEntry> marketData) {
-        var secondsMarketKLineEntries = getUiDataFromMarketEntries(marketData);
-        JsonUtils.updateUiMarketData(secondsMarketKLineEntries);
-    }
-
     @NotNull
     private static TreeMap<Long, MarketKlineEntry> getUiDataFromMarketEntries(TreeMap<Long, MarketEntry> marketData) {
         return marketData
@@ -92,37 +91,19 @@ public class JsonUtils {
                 ));
     }
 
-    public static void updateAnalysedData(List<Extremum> extrema,
-                                            List<Imbalance> imbalances,
-                                            List<Position> positions,
-                                            TreeMap<Long, MarketEntry> marketData) {
-        updateAnalysedUiData(extrema, imbalances, positions, getUiDataFromMarketEntries(marketData));
-    }
-
-    public static void updateAnalysedUiData(List<Extremum> extrema,
-                                            List<Imbalance> imbalances,
-                                            List<Position> positions,
-                                            TreeMap<Long, MarketKlineEntry> uiMarketData) {
+    public static void updateAnalysedData(List<Imbalance> imbalances, List<Position> positions) {
         Log.debug("onchart with:");
-        Log.debug(extrema.size() + " zones");
         Log.debug(imbalances.size() + " imbalances");
         Log.debug(positions.size() + " positions");
 
         final ArrayNode onchart = MAPPER.createArrayNode();
 
-        if (uiMarketData.isEmpty()) {
-            return;
-        }
         if (!imbalances.isEmpty()) {
-            parseImbalances(imbalances, uiMarketData, onchart);
+            parseImbalances(imbalances, onchart);
         }
 
         if (!positions.isEmpty()) {
-            parsePositions(positions, uiMarketData, onchart);
-        }
-
-        if (!extrema.isEmpty()) {
-            parseExtremums(extrema, uiMarketData, onchart);
+            parsePositions(positions, onchart);
         }
 
         try {
@@ -145,163 +126,139 @@ public class JsonUtils {
     }
 
     private static void parseImbalances(List<Imbalance> imbalances,
-                                        TreeMap<Long, MarketKlineEntry> uiMarketData,
                                         ArrayNode onchart) {
 
         for (Imbalance imbalance : imbalances) {
-            Optional<Long> startTime = uiMarketData.values().stream()
-                    .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime_ -> startTime_ < imbalance.getStartTime())
-                    .max(Comparator.comparing(Long::longValue));
 
-            Optional<Long> endTime = uiMarketData.values().stream()
-                    .map(MarketKlineEntry::getStartTime)
-                    .filter(endTime_ -> endTime_ > imbalance.getEndTime())
-                    .min(Comparator.comparing(Long::longValue));
+            /* две вертикальные линии показывающие границы имбаланса */
+            ArrayNode data = MAPPER.createArrayNode();
+            ArrayNode start = MAPPER.createArrayNode();
+            start.add(imbalance.getStartTime());
+            start.add("Imbalance");
+            start.add(0);
+            start.add("#080469");
+            start.add(0.05);
 
-            Optional<Long> completeTime = uiMarketData.values().stream()
-                    .map(MarketKlineEntry::getStartTime)
-                    .filter(completeTime_ -> completeTime_ > imbalance.getCompleteTime())
-                    .min(Comparator.comparing(Long::longValue));
+            ArrayNode end = MAPPER.createArrayNode();
+            end.add(imbalance.getEndTime());
+            end.add("Imbalance");
+            end.add(1);
+            end.add("#080469");
+            end.add(0.05);
 
-            if (startTime.isEmpty() || endTime.isEmpty() || completeTime.isEmpty()) {
-                continue;
-            }
+            data.add(start);
+            data.add(end);
 
-            String color = imbalance.getType() == Imbalance.Type.UP ? "#002d9e" : "#b8077d";
+            Settings settingsSplitters = new Settings();
+            settingsSplitters.lineWidth = 2;
+            settingsSplitters.lineColor = "#080469";
+            settingsSplitters.legend = false;
 
-            ArrayNode p1NodeUp = MAPPER.createArrayNode();
-            p1NodeUp.add(startTime.get());
-            p1NodeUp.add(imbalance.getStartPrice());
+            Onchart splitter = new Onchart("", "Splitters", data, settingsSplitters);
 
-            ArrayNode p2NodeUp = MAPPER.createArrayNode();
-            p2NodeUp.add(endTime.get());
-            p2NodeUp.add(imbalance.getStartPrice());
+            ObjectNode onchartSplitter = MAPPER.valueToTree(splitter);
+            onchart.add(onchartSplitter);
 
-            Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
-            Segment segmentUp = new Segment("", "Segment", MAPPER.createArrayNode(), settingsUp);
 
-            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
-            onchart.add(segmentNodeUp);
-
+            /* две надписи - одна вначале имбаланса с его начальной ценой, вторая в конце */
             ArrayNode p1NodeStart = MAPPER.createArrayNode();
-            p1NodeStart.add(startTime.get());
-            p1NodeStart.add(imbalance.getEndPrice());
+            p1NodeStart.add(imbalance.getStartTime() - 1000);
+            p1NodeStart.add(imbalance.getStartPrice());
 
-            ArrayNode p2NodeEnd = MAPPER.createArrayNode();
-            p2NodeEnd.add(endTime.get());
-            p2NodeEnd.add(imbalance.getEndPrice());
+            ArrayNode p2NodeStart = MAPPER.createArrayNode();
+            p2NodeStart.add(imbalance.getStartTime());
+            p2NodeStart.add(imbalance.getStartPrice());
 
-            Settings settingsDown = new Settings(p1NodeStart, p2NodeEnd, 10, color);
-            Segment segmentDown = new Segment("", "Segment", MAPPER.createArrayNode(), settingsDown);
+            Settings settingsStart = new Settings();
+            settingsStart.p1 = p1NodeStart;
+            settingsStart.p2 = p2NodeStart;
+            settingsStart.lineWidth = 5;
+            settingsStart.color = "#000000";
+            settingsStart.legend = true;
 
-            ObjectNode segmentNodeDown = MAPPER.valueToTree(segmentDown);
-            onchart.add(segmentNodeDown);
+            /* подробные данные для отображения в легенде */
+            String onchartStartName = String.format("%s speed = %.2f$/minute || price = %.2f$ || time = %ds || computed duration = %.2fms",
+                    imbalance.getType(),
+                    imbalance.speed() * 60_000L,
+                    imbalance.size(),
+                    imbalance.timeSize(),
+                    imbalance.getComputedDuration());
+            Onchart onchartStart = new Onchart(onchartStartName, "Segment", MAPPER.createArrayNode(), settingsStart);
 
-            ArrayNode p1NodeComplete = MAPPER.createArrayNode();
-            p1NodeComplete.add(endTime.get());
-            p1NodeComplete.add(imbalance.getCompletePrice());
+            ObjectNode segmentNodeStart = MAPPER.valueToTree(onchartStart);
+            onchart.add(segmentNodeStart);
 
-            ArrayNode p2NodeComplete = MAPPER.createArrayNode();
-            p2NodeComplete.add(completeTime.get());
-            p2NodeComplete.add(imbalance.getCompletePrice());
+            data = MAPPER.createArrayNode();
 
-            Settings settingsComplete = new Settings(p1NodeComplete, p2NodeComplete, 10, color);
-            Segment segmentComplete = new Segment("completed", "Segment", MAPPER.createArrayNode(), settingsComplete);
+            ArrayNode first = MAPPER.createArrayNode();
+            first.add(imbalance.getStartTime());
+            first.add(0);
+            first.add(Double.parseDouble(String.format("%.2f", imbalance.getStartPrice())));
+            first.add(String.format("start price = %.2f$",
+                    imbalance.getType() == Imbalance.Type.UP ? imbalance.getStartPrice() : imbalance.getStartPrice() - imbalance.size() * 0.02));
+            data.add(first);
 
-            ObjectNode segmentNodeComplete = MAPPER.valueToTree(segmentComplete);
-            onchart.add(segmentNodeComplete);
+            ArrayNode second = MAPPER.createArrayNode();
+            second.add(imbalance.getEndTime());
+            second.add(0);
+            second.add(Double.parseDouble(String.format("%.2f", imbalance.getEndPrice())));
+            second.add(String.format("end price = %.2f$",
+                    imbalance.getType() == Imbalance.Type.UP ? imbalance.getEndPrice() : imbalance.getEndPrice() - imbalance.size() * 0.02));
+            data.add(second);
+
+            Settings settingsPriceLabels = new Settings();
+            settingsPriceLabels.labelColor = "#000000";
+            settingsPriceLabels.markerSize = 1;
+            settingsPriceLabels.legend = false;
+
+            Onchart onchartPriceLabels = new Onchart("", "Trades", data, settingsPriceLabels);
+
+            ObjectNode segmentNodePriceLabels = MAPPER.valueToTree(onchartPriceLabels);
+            onchart.add(segmentNodePriceLabels);
         }
     }
 
-    private static void parsePositions(List<Position> positions,
-                                       TreeMap<Long, MarketKlineEntry> uiMarketData,
-                                       ArrayNode onchart) {
+    private static void parsePositions(List<Position> positions, ArrayNode onchart) {
 
         for (Position position : positions) {
-            Optional<Long> timeLeft = uiMarketData.values().stream()
-                    .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime < position.getOpenTime())
-                    .max(Comparator.comparing(Long::longValue));
+            ArrayNode data = MAPPER.createArrayNode();
 
-            Optional<Long> timeRight = uiMarketData.values().stream()
-                    .map(MarketKlineEntry::getStartTime)
-                    .filter(startTime -> startTime > position.getCloseTime())
-                    .min(Comparator.comparing(Long::longValue));
-            if (timeRight.isEmpty() || timeLeft.isEmpty()) {
-                continue;
-            }
+            ArrayNode open = MAPPER.createArrayNode();
+            open.add(position.getOpenTime());
+            open.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
+            open.add(Double.parseDouble(String.format("%.2f", position.getOpenPrice())));
+            open.add(String.format("OPEN with price %.2f$", position.getOpenPrice()));
+            data.add(open);
 
-            String openColor = position.getOrder().getType() == OrderType.LONG ? "#21ba02" : "#db0602";
-            String closeColor = position.getOrder().getType() == OrderType.LONG ? "#0f5202" : "#590301";
+            ArrayNode close = MAPPER.createArrayNode();
+            close.add(position.getCloseTime());
+            close.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
+            close.add(Double.parseDouble(String.format("%.2f", position.getClosePrice())));
+            String profit = position.getProfitLoss() < 0 ? "loss" : "profit";
+            close.add(String.format("CLOSE with %s %.2f$", profit, position.getProfitLoss()));
+            data.add(close);
 
-            ArrayNode p1NodeUp = MAPPER.createArrayNode();
-            p1NodeUp.add(timeLeft.get());
-            p1NodeUp.add(position.getOpenPrice());
+            Settings settingsOpen = new Settings();
+            settingsOpen.labelColor = "#000000";
+            settingsOpen.markerSize = 8;
+            settingsOpen.legend = false;
 
-            ArrayNode p2NodeUp = MAPPER.createArrayNode();
-            p2NodeUp.add(timeRight.get());
-            p2NodeUp.add(position.getOpenPrice());
-
-            Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, openColor);
-            Segment segmentUp = new Segment("pos", "Segment", MAPPER.createArrayNode(), settingsUp);
-
-            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
-            onchart.add(segmentNodeUp);
-
-            ArrayNode p1NodeDown = MAPPER.createArrayNode();
-            p1NodeDown.add(timeLeft.get());
-            p1NodeDown.add(position.getClosePrice());
-
-            ArrayNode p2NodeDown = MAPPER.createArrayNode();
-            p2NodeDown.add(timeRight.get());
-            p2NodeDown.add(position.getClosePrice());
-
-            Settings settingsDown = new Settings(p1NodeDown, p2NodeDown, 5, closeColor);
-            Segment segmentDown = new Segment("pos", "Segment", MAPPER.createArrayNode(), settingsDown);
-
-            ObjectNode segmentNodeDown = MAPPER.valueToTree(segmentDown);
-            onchart.add(segmentNodeDown);
+            Onchart onchartOpen = new Onchart("Trade", "Trades", data, settingsOpen);
+            ObjectNode segmentNodeOpen = MAPPER.valueToTree(onchartOpen);
+            onchart.add(segmentNodeOpen);
         }
+
+        double summaryProfitLoss = positions.stream().map(Position::getProfitLoss).reduce(0., Double::sum);
+        String onchartName = String.format("Summary profit loss = %.2f$", summaryProfitLoss);
+        Settings settingsProfitLoss = new Settings();
+        settingsProfitLoss.markerSize = 1;
+        settingsProfitLoss.legend = true;
+        Onchart onchartProfitLoss = new Onchart(onchartName, "Segment", MAPPER.createArrayNode(), settingsProfitLoss);
+        ObjectNode segmentNodeProfitLoss = MAPPER.valueToTree(onchartProfitLoss);
+        onchart.add(segmentNodeProfitLoss);
     }
 
-    private static void parseExtremums(List<Extremum> extrema,
-                                       TreeMap<Long, MarketKlineEntry> uiMarketData,
-                                       ArrayNode onchart) {
-
-        for (Extremum extremum : extrema) {
-
-            MarketKlineEntry time = uiMarketData.values().stream()
-                    .min(Comparator.comparing(entry -> Math.abs(entry.getStartTime() - extremum.getTimestamp())))
-                    .orElse(null);
-
-            if (time == null || uiMarketData.values().stream().noneMatch(data -> data.getStartTime() == time.getStartTime() + 8L * 60L * 60L * 1000L)) {
-                continue;
-            }
-
-            String color = extremum.getType() == Extremum.Type.MAX ? "#23a776" : "#e54150";
-
-            ArrayNode p1NodeUp = MAPPER.createArrayNode();
-            p1NodeUp.add(time.getStartTime());
-            p1NodeUp.add(extremum.getPrice());
-
-            ArrayNode p2NodeUp = MAPPER.createArrayNode();
-            p2NodeUp.add(time.getStartTime() + 8L * 60L * 60L * 1000L);
-            p2NodeUp.add(extremum.getPrice());
-
-            Settings settingsUp = new Settings(p1NodeUp, p2NodeUp, 5, color);
-            Segment segmentUp = new Segment("zone", "Segment", MAPPER.createArrayNode(), settingsUp);
-
-            ObjectNode segmentNodeUp = MAPPER.valueToTree(segmentUp);
-            onchart.add(segmentNodeUp);
-        }
-    }
-
-    public static void serializeAll(List<Extremum> extremums, List<Imbalance> imbalances, List<Position> positions) {
-        if (!extremums.isEmpty()) {
-            extremumSerializer.serialize(extremums);
-        }
-
+    public static void serializeAll(List<Imbalance> imbalances, List<Position> positions) {
         if (!imbalances.isEmpty()) {
             imbalanceSerializer.serialize(imbalances);
         }
@@ -318,11 +275,18 @@ public class JsonUtils {
         } else if (clazz == Position.class) {
             return (List<T>) positionSerializer.deserialize();
         } else {
-            return (List<T>) extremumSerializer.deserialize();
+            return new ArrayList<>();
         }
     }
 
-    private record Segment(String name, String type, ArrayNode data, Settings settings) { }
+    private record Onchart(String name, String type, ArrayNode data, Settings settings) { }
 
-    private record Settings(ArrayNode p1, ArrayNode p2, int lineWidth, String color) { }
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    private static class Settings {
+        public Settings() { }
+        ArrayNode p1, p2;
+        Integer lineWidth, markerSize;
+        String color, lineColor, labelColor;
+        Boolean legend;
+    }
 }

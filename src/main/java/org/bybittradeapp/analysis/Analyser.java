@@ -3,7 +3,6 @@ package org.bybittradeapp.analysis;
 import org.bybittradeapp.analysis.service.*;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
-import org.bybittradeapp.ui.domain.MarketKlineEntry;
 import org.bybittradeapp.ui.utils.JsonUtils;
 import org.bybittradeapp.ui.utils.Serializer;
 
@@ -20,15 +19,13 @@ import static org.bybittradeapp.logging.Log.logProgress;
  */
 public class Analyser {
     private final TreeMap<Long, MarketEntry> marketData;
-    private final TreeMap<Long, MarketKlineEntry> uiMarketData;
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
     private final Serializer<List<TreeMap<Long, MarketEntry>>> serializer =
             new Serializer<>("/src/main/resources/results/imbalances/market-data/");
 
-    public Analyser(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
+    public Analyser(TreeMap<Long, MarketEntry> marketData) {
         this.marketData = marketData;
-        this.uiMarketData = uiMarketData;
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
 
@@ -52,8 +49,8 @@ public class Analyser {
         volatilityService.unsubscribeAll();
         Log.info("analysis of technical instruments finished");
 
-        JsonUtils.updateUiMarketData(uiMarketData);
-        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>(), uiMarketData);
-        JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), new ArrayList<>());
+//        JsonUtils.updateMarketData(marketData);
+//        JsonUtils.updateAnalysedData(imbalanceService.getImbalances(), new ArrayList<>());
+        JsonUtils.serializeAll(imbalanceService.getImbalances(), new ArrayList<>());
     }
 }

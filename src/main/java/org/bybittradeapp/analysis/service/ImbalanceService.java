@@ -254,6 +254,7 @@ public class ImbalanceService implements VolatilityListener {
         double completeTimeModificator = currentImbalance.size() / priceChangeThreshold;
         if (currentTime - currentImbalance.getEndTime() > COMPLETE_TIME * completeTimeModificator) {
             Log.debug(currentImbalance.getType() + " completed: " + currentImbalance, currentTime);
+            currentImbalance.setCompleteTime(currentTime);
             currentState = ImbalanceState.COMPLETED;
             return true;
         }
@@ -263,6 +264,7 @@ public class ImbalanceService implements VolatilityListener {
     public boolean checkPotentialEndPointCondition(long currentTime, MarketEntry currentEntry) {
         double relevantSize = currentImbalance.size() / priceChangeThreshold;
         double possibleDuration = currentImbalance.timeSize() / relevantSize * POTENTIAL_COMPLETE_TIME_MODIFICATOR;
+        currentImbalance.setComputedDuration(possibleDuration);
         if (currentTime - currentImbalance.getEndTime() > Math.max(possibleDuration, MIN_POTENTIAL_COMPLETE_TIME) &&
                 Math.abs(currentImbalance.getEndPrice() - currentEntry.average()) / currentImbalance.size() < MAX_VALID_IMBALANCE_PART_FOR_POSITION
         ) {
