@@ -14,25 +14,27 @@ public class ImbalanceService implements VolatilityListener {
      * Время хранения ежесекундных данных (1000мс * 60с * 5м = 5 минут).
      * Отдельная коллекция для поиска окончания размером 120 секунд.
      */
-    private static final long DATA_LIVE_TIME = 10 * 60_000L;
-    private static final long LARGE_DATA_LIVE_TIME = 60 * 60_000L;
+    public static final long DATA_LIVE_TIME = 10 * 60_000L;
+    public static final long LARGE_DATA_LIVE_TIME = 60 * 60_000L;
+    public static final long LARGE_DATA_ENTRY_SIZE = 5_000L;
 
     /**
      * Время за которое если не появилось нового минимума то считаем имбаланс завершенным (1000мс * 60с = 1 минута)
      */
-    private static final long COMPLETE_TIME = 20_000L;
-    private static final long POTENTIAL_COMPLETE_TIME = 6_000L;
+    public static final long COMPLETE_TIME = 60_000L;
+    public static final double POTENTIAL_COMPLETE_TIME_MODIFICATOR = 0.045;
 
     /**
      * Константы для расчета минимальной скорости и цены.
      * Формула: минимальная цена/скорость = [средняя цена] * [волатильность] * [константа]
      */
-    private static final double SPEED_MODIFICATOR = 1E-7, PRICE_MODIFICATOR = 0.02;
+    public static final double SPEED_MODIFICATOR = 1E-7, PRICE_MODIFICATOR = 0.02;
 
-    private static final double MAX_VALID_IMBALANCE_PART_FOR_POSITION = 0.2;
-    private static final int MIN_IMBALANCE_TIME_SIZE = 4;
-    public static final long LARGE_DATA_SIZE = 5_000L;
-    private static final long TIME_CHECK_CONTR_IMBALANCE = 10 * 60_000L;
+    public static final double MAX_VALID_IMBALANCE_PART_FOR_POSITION = 0.2;
+    public static final int MIN_IMBALANCE_TIME_SIZE = 10;
+    public static final long TIME_CHECK_CONTR_IMBALANCE = 20 * 60_000L;
+    public static final long MIN_POTENTIAL_COMPLETE_TIME = 2_000L;
+
 
     /**
      * Минимальное изменение цены и минимальная скорость изменения.
@@ -54,30 +56,31 @@ public class ImbalanceService implements VolatilityListener {
 
     private final LinkedList<Imbalance> imbalances = new LinkedList<>();
 
-
     public ImbalanceService() {
         Log.info(String.format("""
                         imbalance parameters:
-                            complete time :: %d
-                            potential complete time :: %d
+                            complete time :: %d minutes
+                            potential complete time modificator :: %.3f
                             speed modificator :: %s
                             price modificator :: %s
-                            maximum valid imbalance part when open position :: %.2f
-                            minimum imbalance size :: %d
-                            data live time :: %d
-                            large data live time :: %d
-                            large data size :: %d
-                            time in the past to check for contr-imbalance :: %d""",
-                COMPLETE_TIME,
-                POTENTIAL_COMPLETE_TIME,
+                            maximum valid imbalance part when open position :: %.3f
+                            minimum imbalance size :: %d$
+                            minimum potential complete time :: %d seconds
+                            data live time :: %d minutes
+                            large data live time :: %d minutes
+                            large data entry size :: %d seconds
+                            time in the past to check for contr-imbalance :: %d minutes""",
+                COMPLETE_TIME/60_000L,
+                POTENTIAL_COMPLETE_TIME_MODIFICATOR,
                 SPEED_MODIFICATOR,
                 PRICE_MODIFICATOR,
                 MAX_VALID_IMBALANCE_PART_FOR_POSITION,
                 MIN_IMBALANCE_TIME_SIZE,
-                DATA_LIVE_TIME,
-                LARGE_DATA_LIVE_TIME,
-                LARGE_DATA_SIZE,
-                TIME_CHECK_CONTR_IMBALANCE));
+                MIN_POTENTIAL_COMPLETE_TIME/1000,
+                DATA_LIVE_TIME/60_000L,
+                LARGE_DATA_LIVE_TIME/60_000L,
+                LARGE_DATA_ENTRY_SIZE/1000,
+                TIME_CHECK_CONTR_IMBALANCE/60_000L));
     }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
@@ -258,8 +261,9 @@ public class ImbalanceService implements VolatilityListener {
     }
 
     public boolean checkPotentialEndPointCondition(long currentTime, MarketEntry currentEntry) {
-        double potentialEndPointModificator = currentImbalance.size() / priceChangeThreshold;
-        if (currentTime - currentImbalance.getEndTime() > POTENTIAL_COMPLETE_TIME * potentialEndPointModificator &&
+        double relevantSize = currentImbalance.size() / priceChangeThreshold;
+        double possibleDuration = currentImbalance.timeSize() / relevantSize * POTENTIAL_COMPLETE_TIME_MODIFICATOR;
+        if (currentTime - currentImbalance.getEndTime() > Math.max(possibleDuration, MIN_POTENTIAL_COMPLETE_TIME) &&
                 Math.abs(currentImbalance.getEndPrice() - currentEntry.average()) / currentImbalance.size() < MAX_VALID_IMBALANCE_PART_FOR_POSITION
         ) {
             currentState = ImbalanceState.POTENTIAL_END_POINT;
@@ -293,7 +297,7 @@ public class ImbalanceService implements VolatilityListener {
         if (lastMinuteTimestamp == -1) {
             lastMinuteTimestamp = currentTime;
         }
-        if (currentTime - lastMinuteTimestamp > LARGE_DATA_SIZE) {
+        if (currentTime - lastMinuteTimestamp > LARGE_DATA_ENTRY_SIZE) {
             largeData.put(currentTime, new MarketEntry(currentMinuteHigh, currentMinuteLow));
             currentMinuteHigh = 0;
             currentMinuteLow = Double.MAX_VALUE;
