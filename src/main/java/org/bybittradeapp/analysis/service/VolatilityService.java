@@ -12,7 +12,6 @@ import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 import org.jetbrains.annotations.NotNull;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,14 +30,23 @@ public class VolatilityService {
 
     private final List<VolatilityListener> listeners = new ArrayList<>();
 
-    public VolatilityService() {  }
+    public VolatilityService() {
+        Log.info(String.format("""
+                        imbalance parameters:
+                            update time period :: %d hours
+                            volatility calculation past time :: %d days
+                            average price calculation past time :: %d days""",
+                UPDATE_TIME_PERIOD_MILLS / 3_600_000L,
+                VOLATILITY_CALCULATE_DAYS_COUNT,
+                AVERAGE_PRICE_CALCULATE_DAYS_COUNT));
+    }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
         if (currentTime - lastUpdateTime > UPDATE_TIME_PERIOD_MILLS) {
 //            double volatility = calculateVolatility(currentTime);
             double volatility = 0.05;
             double average = calculateAverage(currentTime);
-            Log.debug(String.format("volatility=%.2f. average=%.2f", volatility, average), Instant.ofEpochMilli(currentTime));
+            Log.debug(String.format("volatility=%.2f%% || average=%.2f$", volatility * 100, average), currentTime);
             listeners.forEach(listener -> listener.notify(volatility, average));
             lastUpdateTime = currentTime;
         }

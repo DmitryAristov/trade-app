@@ -2,13 +2,9 @@ package org.bybittradeapp.backtest.domain;
 
 import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.TimeFormatter;
 
 import java.io.Serializable;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
-
-import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Order implements Serializable {
 
@@ -137,16 +133,15 @@ public class Order implements Serializable {
         return String.format("""
                         Order
                            type :: %s
-                           moneyAmount :: %.2f
-                           takeProfitPrice :: %.2f
-                           stopLossPrice :: %.2f
-                           createTime :: %s
-                        """,
+                           moneyAmount :: %.2f$
+                           takeProfitPrice :: %.2f$
+                           stopLossPrice :: %.2f$
+                           createTime :: %s""",
                 type,
                 moneyAmount,
                 takeProfitPrice,
                 stopLossPrice,
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(createTime), ZoneOffset.UTC).format(DATETIME_FORMATTER));
+                TimeFormatter.format(createTime));
     }
 }
 

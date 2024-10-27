@@ -11,7 +11,6 @@ import org.bybittradeapp.ui.utils.JsonUtils;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -30,7 +29,6 @@ public class BackTester {
 
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
-    private final TrendService trendService;
 
     public BackTester(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
@@ -39,11 +37,10 @@ public class BackTester {
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
-        this.trendService = new TrendService();
 
-        volatilityService.subscribeAll(List.of(this.imbalanceService, this.trendService));
+        volatilityService.subscribe(this.imbalanceService);
 
-        this.strategy = new Strategy(simulator, marketData, imbalanceService, trendService, account);
+        this.strategy = new Strategy(simulator, marketData, imbalanceService, account);
     }
 
     public void runTests() {
@@ -65,8 +62,8 @@ public class BackTester {
         volatilityService.unsubscribeAll();
         Log.info(String.format("backtest finished with balance %.2f$", account.getBalance()));
 
-//        JsonUtils.updateUiMarketData(uiMarketData);
-//        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
+        JsonUtils.updateUiMarketData(uiMarketData);
+        JsonUtils.updateAnalysedUiData(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions(), uiMarketData);
         JsonUtils.serializeAll(new ArrayList<>(), imbalanceService.getImbalances(), simulator.getPositions());
     }
 }

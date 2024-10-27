@@ -1,11 +1,8 @@
 package org.bybittradeapp.ui.domain;
 
-import java.io.Serializable;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import org.bybittradeapp.ui.utils.TimeFormatter;
 
-import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
+import java.io.Serializable;
 
 /**
  * Для отображения в UI в виде "свечей"
@@ -59,10 +56,15 @@ public class MarketKlineEntry implements Serializable {
 
     @Override
     public String toString() {
-        return "MarketKlineEntry" + "\n" +
-                "   startTime :: " + LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.UTC).format(DATETIME_FORMATTER) + "\n" +
-                "   openPrice :: " + openPrice + "\n" +
-                "   highPrice :: " + highPrice + "\n" +
-                "   lowPrice :: " + lowPrice + "\n";
+        return String.format("""
+                        MarketKlineEntry
+                           startTime :: %s
+                           openPrice :: %.2f$
+                           highPrice :: %.2f$
+                           lowPrice :: %.2f$""",
+                TimeFormatter.format(startTime),
+                openPrice,
+                highPrice,
+                lowPrice);
     }
 }

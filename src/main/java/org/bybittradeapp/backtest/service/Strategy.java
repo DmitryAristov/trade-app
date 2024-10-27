@@ -3,7 +3,6 @@ package org.bybittradeapp.backtest.service;
 import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.analysis.service.ImbalanceService;
-import org.bybittradeapp.analysis.service.TrendService;
 import org.bybittradeapp.backtest.domain.Account;
 import org.bybittradeapp.backtest.domain.ExecutionType;
 import org.bybittradeapp.backtest.domain.Order;
@@ -11,9 +10,7 @@ import org.bybittradeapp.backtest.domain.OrderType;
 import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
-import org.bybittradeapp.ui.utils.JsonUtils;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
 
@@ -51,19 +48,16 @@ public class Strategy {
     private final TreeMap<Long, MarketEntry> marketData;
     private final ImbalanceService imbalanceService;
 
-    private final TrendService trendService;
     private final Account account;
     public State state = State.WAIT_IMBALANCE;
 
     public Strategy(ExchangeSimulator simulator,
                     TreeMap<Long, MarketEntry> marketData,
                     ImbalanceService imbalanceService,
-                    TrendService trendService,
                     Account account) {
         this.simulator = simulator;
         this.marketData = marketData;
         this.imbalanceService = imbalanceService;
-        this.trendService = trendService;
         this.account = account;
         Log.info(String.format("""
                         strategy parameters:
@@ -71,12 +65,12 @@ public class Strategy {
                             first take :: %.2f
                             second take :: %.2f
                             stop modificator :: %.2f
-                            position live time :: %d""",
+                            position live time :: %d minutes""",
                 TWO_TAKES,
                 FIRST_TAKE_PROFIT_THRESHOLD,
                 SECOND_TAKE_PROFIT_THRESHOLD,
                 STOP_LOSS_MODIFICATOR,
-                POSITION_LIVE_TIME));
+                POSITION_LIVE_TIME/60_000L));
     }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
@@ -119,7 +113,6 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
-                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 } else if (positions.size() == 1) {
                     Position position = positions.get(0);
@@ -135,7 +128,6 @@ public class Strategy {
 
                 positions = simulator.getOpenPositions();
                 if (positions.isEmpty()) {
-                    updateUI(currentTime);
                     state = State.WAIT_IMBALANCE;
                 }
             }
@@ -211,18 +203,5 @@ public class Strategy {
                 account.updateBalance(position);
             }
         });
-    }
-
-    private void updateUI(long currentTime) {
-        if (simulator.getPositions().size() >= 2) {
-            List<Position> positions = List.of(simulator.getPositions().get(simulator.getPositions().size() - 1),
-                    simulator.getPositions().get(simulator.getPositions().size() - 2));
-
-            long delay = 10 * 60L * 1000L;
-            Imbalance imbalance = positions.get(0).getOrder().getImbalance();
-            var marketData__ = new TreeMap<>(marketData.subMap(imbalance.getStartTime() - delay, currentTime + delay));
-            JsonUtils.updateMarketData(marketData__);
-            JsonUtils.updateAnalysedData(new ArrayList<>(), List.of(imbalance), positions, marketData__);
-        }
     }
 }

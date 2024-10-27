@@ -2,6 +2,7 @@ package org.bybittradeapp;
 
 import com.bybit.api.client.domain.market.MarketInterval;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.bybittradeapp.analysis.Analyser;
 import org.bybittradeapp.backtest.BackTester;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
@@ -13,10 +14,8 @@ import org.bybittradeapp.ui.utils.Serializer;
 import java.util.TreeMap;
 
 /**TODO
- *  <li>попробовать брать если быстро вернулось на 20% обратно и сам имбаланс быстрый (то есть брать не по времени, а по скорости возврата обратно от размера имбаланса)</li>
- *  <li>если скоростной и равномерный - то по возврату</li>
- *  <li>уменьшить скорость и увеличить минимальный размер (потестировать)</li>
  *  <li>скачать volume</li>
+ *  <li>!!!!     НУЖНО ВЫЯСНИТЬ ПОЧЕМУ ПОЛОВИНА ИМБАЛАНСОВ НЕ БЕРЕТСЯ     !!!!</li>
  */
 public class Main {
     public static final String PEZDA = """

@@ -1,11 +1,8 @@
 package org.bybittradeapp.analysis.domain;
 
-import java.io.Serializable;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import org.bybittradeapp.ui.utils.TimeFormatter;
 
-import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
+import java.io.Serializable;
 
 public class Imbalance implements Serializable {
 
@@ -94,18 +91,25 @@ public class Imbalance implements Serializable {
         return size() / timeSize();
     }
 
+    public static Imbalance of(Imbalance imb) {
+        return new Imbalance(imb.startTime, imb.startPrice, imb.endTime, imb.endPrice, imb.type);
+    }
+
+    public static Imbalance of(long startTime, double startPrice, long endTime, double endPrice, Type type) {
+        return new Imbalance(startTime, startPrice, endTime, endPrice, type);
+    }
+
     @Override
     public String toString() {
         return String.format("""
                         Imbalance
                            startTime :: %s
-                           startPrice :: %.2f
+                           startPrice :: %.2f$
                            endTime :: %s
-                           endPrice :: %.2f
-                        """,
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(startTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                           endPrice :: %.2f$""",
+                TimeFormatter.format(startTime),
                 startPrice,
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(endTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                TimeFormatter.format(endTime),
                 endPrice);
     }
 }

@@ -7,7 +7,6 @@ import org.bybittradeapp.backtest.domain.Position;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
 
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Iterator;
@@ -112,36 +111,38 @@ public class ExchangeSimulator {
         Position position = new Position(order, currentEntry, currentTime);
         positions.add(position);
         account.updateBalance(position);
-        Log.debug(String.format("%s OPENED ||| price: %.2f ||| money: %.2f ||| fee: %.2f ||| balance: %.2f ||| on %s",
-                position.getOrder().getType(),
-                position.getOpenPrice(),
-                position.getOrder().getMoneyAmount(),
-                position.getOpenFee(),
-                account.getBalance(),
-                Instant.ofEpochMilli(currentTime)));
+        Log.debug(String.format("%s OPENED ||| price: %.2f$ ||| money: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+                        position.getOrder().getType(),
+                        position.getOpenPrice(),
+                        position.getOrder().getMoneyAmount(),
+                        position.getOpenFee(),
+                        account.getBalance()),
+                currentTime);
     }
 
     public void closeTake(Position position, long currentTime) {
         position.close(currentTime, position.getTakeProfitPrice());
         account.updateBalance(position);
-        Log.debug(String.format("%s CLOSED ||| P&L++++: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f |||",
-                position.getOrder().getType(),
-                position.getProfitLoss(),
-                position.getClosePrice(),
-                position.getCloseFee(),
-                account.getBalance()), Instant.ofEpochMilli(currentTime));
+        Log.debug(String.format("%s CLOSED ||| P&L++++: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+                        position.getOrder().getType(),
+                        position.getProfitLoss(),
+                        position.getClosePrice(),
+                        position.getCloseFee(),
+                        account.getBalance()),
+                currentTime);
+
     }
 
     public void closeLoss(Position position, long currentTime) {
         position.close(currentTime, position.getStopLossPrice());
         account.updateBalance(position);
-        Log.debug(String.format("%s CLOSED ||| P&L----: %.2f ||| price: %.2f ||| fee: %.2f ||| balance: %.2f |||",
-                position.getOrder().getType(),
-                position.getProfitLoss(),
-                position.getClosePrice(),
-                position.getCloseFee(),
-                account.getBalance()),
-                Instant.ofEpochMilli(currentTime));
+        Log.debug(String.format("%s CLOSED ||| P&L----: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+                        position.getOrder().getType(),
+                        position.getProfitLoss(),
+                        position.getClosePrice(),
+                        position.getCloseFee(),
+                        account.getBalance()),
+                currentTime);
     }
 
     public List<Position> getOpenPositions() {

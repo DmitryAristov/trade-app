@@ -2,14 +2,11 @@ package org.bybittradeapp.backtest.domain;
 
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.TimeFormatter;
 
 import java.io.Serializable;
-import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 
 import static org.bybittradeapp.backtest.service.ExchangeSimulator.MARKET_ORDER_TRADE_FEE;
-import static org.bybittradeapp.logging.Log.DATETIME_FORMATTER;
 
 public class Position implements Serializable {
     private final Order order;
@@ -70,7 +67,7 @@ public class Position implements Serializable {
             case LONG -> (closePrice - openPrice) * amountInBTC;
             case SHORT -> (openPrice - closePrice) * amountInBTC;
         };
-        Log.debug(String.format("profitLoss :: %.2f", profitLoss));
+        Log.debug(String.format("profitLoss :: %.2f$", profitLoss));
         return profitLoss;
     }
 
@@ -158,15 +155,14 @@ public class Position implements Serializable {
                         Position
                            amountInBTC :: %.4f
                            openTime :: %s
-                           openPrice :: %.2f
-                           openFee :: %.2f
-                           closePrice :: %.2f
-                           closeFee :: %.2f
-                           takeProfitPrice :: %.2f
-                           stopLossPrice :: %.2f
-                        """,
+                           openPrice :: %.2f$
+                           openFee :: %.2f$
+                           closePrice :: %.2f$
+                           closeFee :: %.2f$
+                           takeProfitPrice :: %.2f$
+                           stopLossPrice :: %.2f$""",
                 amountInBTC,
-                LocalDateTime.ofInstant(Instant.ofEpochMilli(openTime), ZoneOffset.UTC).format(DATETIME_FORMATTER),
+                TimeFormatter.format(openTime),
                 openPrice,
                 openFee,
                 closePrice,

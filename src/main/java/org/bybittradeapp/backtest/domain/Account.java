@@ -15,7 +15,11 @@ public class Account {
         this.balance = BALANCE;
         this.riskPercentage = RISK_LEVEL;
         this.credit = CREDIT_LEVEL;
-        Log.info(String.format("account parameters:\n    balance :: %d\n    risk :: %.2f\n    credit :: %d",
+        Log.info(String.format("""
+                        account parameters:
+                            balance :: %d$
+                            risk :: %.2f
+                            credit :: %d""",
                 BALANCE, RISK_LEVEL, CREDIT_LEVEL));
     }
 
@@ -41,7 +45,7 @@ public class Account {
         } else {
             this.balance += position.getProfitLoss() - position.getCloseFee();
         }
-        Log.debug(String.format("balance updated: %.2f", this.balance));
+        Log.debug(String.format("balance updated: %.2f$", this.balance));
     }
 }
 

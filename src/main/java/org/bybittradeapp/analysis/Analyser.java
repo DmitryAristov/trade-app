@@ -23,7 +23,6 @@ public class Analyser {
     private final TreeMap<Long, MarketKlineEntry> uiMarketData;
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
-    private final TrendService trendService;
     private final Serializer<List<TreeMap<Long, MarketEntry>>> serializer =
             new Serializer<>("/src/main/resources/results/imbalances/market-data/");
 
@@ -32,9 +31,8 @@ public class Analyser {
         this.uiMarketData = uiMarketData;
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
-        this.trendService = new TrendService();
 
-        volatilityService.subscribeAll(List.of(this.imbalanceService, this.trendService));
+        volatilityService.subscribe(this.imbalanceService);
     }
 
     public void runAnalysis() {

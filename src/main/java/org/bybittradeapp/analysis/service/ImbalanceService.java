@@ -4,8 +4,8 @@ import org.bybittradeapp.analysis.domain.Imbalance;
 import org.bybittradeapp.analysis.domain.ImbalanceState;
 import org.bybittradeapp.logging.Log;
 import org.bybittradeapp.marketdata.domain.MarketEntry;
+import org.bybittradeapp.ui.utils.TimeFormatter;
 
-import java.time.Instant;
 import java.util.*;
 
 public class ImbalanceService implements VolatilityListener {
@@ -181,7 +181,7 @@ public class ImbalanceService implements VolatilityListener {
 
         if (isValid(currentImbalance)) {
             currentState = ImbalanceState.PROGRESS;
-            Log.debug(currentImbalance.getType() + " started: " + currentImbalance, Instant.ofEpochMilli(seconds.lastKey()));
+            Log.debug(currentImbalance.getType() + " started: " + currentImbalance, seconds.lastKey());
         } else {
             currentImbalance = null;
         }
@@ -250,7 +250,7 @@ public class ImbalanceService implements VolatilityListener {
     private boolean checkCompleteCondition(long currentTime) {
         double completeTimeModificator = currentImbalance.size() / priceChangeThreshold;
         if (currentTime - currentImbalance.getEndTime() > COMPLETE_TIME * completeTimeModificator) {
-            Log.debug(currentImbalance.getType() + " completed at " + Instant.ofEpochMilli(currentTime));
+            Log.debug(currentImbalance.getType() + " completed: " + currentImbalance, currentTime);
             currentState = ImbalanceState.COMPLETED;
             return true;
         }
@@ -309,7 +309,7 @@ public class ImbalanceService implements VolatilityListener {
         this.priceChangeThreshold = average * PRICE_MODIFICATOR;
         this.speedThreshold = average * SPEED_MODIFICATOR;
 
-        Log.debug(String.format("new min price change: %.2f$ and speed: %.2f$/minute", priceChangeThreshold, speedThreshold * 60000));
+        Log.debug(String.format("new price change %.2f$ || speed %.2f$/minute", priceChangeThreshold, speedThreshold * 60_000L));
     }
 
     public ImbalanceState getCurrentState() {
