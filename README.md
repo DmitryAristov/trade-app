@@ -13,11 +13,12 @@
 ##
 Для удобства отображения в UI можно:
 1. Поставить https://github.com/tvjsx/trading-vue-js, запустить c "npm run dev"
-2. Поставить брейки в Strategy#123 и Strategy#142 (обе строки System.out.print("");)
-3. Указать правильную тайм-зону в Log.ZONE_OFFSET
-4. Указать правильный путь к trading-vue-js файлу data.json в JsonUtils.DATA_JSON_FILE_PATH
-5. Запустить бэктест с дебагом
-6. Открыть localhost:8080
+2. Заменить содержимое data/data.json на #[вот это](src/main/resources/data_template.json)
+3. Поставить брейки в Strategy#123 и Strategy#142 (обе строки System.out.print("");)
+4. Указать правильную тайм-зону в Log.ZONE_OFFSET
+5. Указать правильный путь к trading-vue-js файлу data.json в JsonUtils.DATA_JSON_FILE_PATH
+6. Запустить бэктест с дебагом
+7. Открыть localhost:8080
 
 На каждом брейке будет обновляться data.json и картинка. На картинке отобразятся имбаланс и открытые на его основе сделки:
 ![trading_vue_shot.png](src/main/resources/pictures/trading_vue_shot.png)
