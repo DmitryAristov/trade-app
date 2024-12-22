@@ -40,7 +40,7 @@ public class Strategy {
      *          При SHORT сделке первый тейк будет выставлен на 59000 - 4000 * 0.4 = 57400$.
      */
     private static final int TAKES_COUNT = 2;
-    private static final double[] TAKE_PROFIT_THRESHOLDS = new double[]{0.35, 0.75};
+    private static final double[] TAKE_PROFIT_THRESHOLDS = new double[]{0.5, 0.75};
     private static final double STOP_LOSS_MODIFICATOR = 0.01;
     private static final long POSITION_LIVE_TIME = 240 * 60_000L;
 
@@ -65,7 +65,7 @@ public class Strategy {
         this.account = account;
         //noinspection ConstantValue
         if (TAKES_COUNT > TAKE_PROFIT_THRESHOLDS.length) {
-            Log.debug(new RuntimeException("foreach take modifier must be defined"));
+            throw new RuntimeException("foreach take modifier must be defined");
         }
 
         Log.info(String.format("""
@@ -166,10 +166,10 @@ public class Strategy {
         if (!simulator.getOpenPositions().isEmpty()) {
             throw new RuntimeException("Trying to open position while already opened " + simulator.getOpenPositions().size());
         }
-        if (openTimes >= 3) {
-            Log.debug("too much attempts for this imbalance");
-            return false;
-        }
+//        if (openTimes >= 3) {
+//            Log.debug("too much attempts for this imbalance");
+//            return false;
+//        }
 
         Imbalance imbalance = imbalanceService.getCurrentImbalance();
         double imbalanceSize = imbalance.size();

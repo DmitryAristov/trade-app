@@ -17,24 +17,24 @@ public class ImbalanceService implements VolatilityListener {
      * Отдельная коллекция для поиска окончания размером 120 секунд.
      */
     public static final long DATA_LIVE_TIME = 10 * 60_000L;
-    public static final long LARGE_DATA_LIVE_TIME = 240 * 60_000L;
+    public static final long LARGE_DATA_LIVE_TIME = 60 * 60_000L;
     public static final long LARGE_DATA_ENTRY_SIZE = 15_000L;
 
     /**
      * Время за которое если не появилось нового минимума то считаем имбаланс завершенным (1000мс * 60с = 1 минута)
      */
     public static final double COMPLETE_TIME_MODIFICATOR = 0.5;
-    public static final double POTENTIAL_COMPLETE_TIME_MODIFICATOR = 0.04;
+    public static final double POTENTIAL_COMPLETE_TIME_MODIFICATOR = 0.05; //TODO для быстрых и медленных нужна разная формула
 
     /**
      * Константы для расчета минимальной скорости и цены.
      * Формула: минимальная цена/скорость = [средняя цена] * [волатильность] * [константа]
      */
-    public static final double SPEED_MODIFICATOR = 1.25E-7, PRICE_MODIFICATOR = 0.025;
+    public static final double SPEED_MODIFICATOR = 1E-7, PRICE_MODIFICATOR = 0.02;
 
-    public static final double MAX_VALID_IMBALANCE_PART = 0.15;
-    public static final int MIN_IMBALANCE_TIME_DURATION = 10;
-    public static final long TIME_CHECK_CONTR_IMBALANCE = 240 * 60_000L;
+    public static final double MAX_VALID_IMBALANCE_PART = 0.2;
+    public static final long MIN_IMBALANCE_TIME_DURATION = 10_000L;
+    public static final long TIME_CHECK_CONTR_IMBALANCE = 60 * 60_000L;
     public static final long MIN_POTENTIAL_COMPLETE_TIME = 2_000L;
     public static final long MIN_COMPLETE_TIME = 60_000L;
     public static final double RETURNED_PRICE_IMBALANCE_PARTITION = 0.5;
@@ -69,7 +69,7 @@ public class ImbalanceService implements VolatilityListener {
                             speed modificator :: %s
                             price modificator :: %s
                             maximum valid imbalance part when open position :: %.3f
-                            minimum imbalance time duration :: %ds
+                            minimum imbalance time duration :: %d seconds
                             minimum potential complete time :: %d seconds
                             minimum complete time :: %d seconds
                             data live time :: %d minutes
@@ -82,7 +82,7 @@ public class ImbalanceService implements VolatilityListener {
                 SPEED_MODIFICATOR,
                 PRICE_MODIFICATOR,
                 MAX_VALID_IMBALANCE_PART,
-                MIN_IMBALANCE_TIME_DURATION,
+                MIN_IMBALANCE_TIME_DURATION/1000,
                 MIN_POTENTIAL_COMPLETE_TIME/1000,
                 MIN_COMPLETE_TIME/1000,
                 DATA_LIVE_TIME/60_000L,
@@ -188,14 +188,13 @@ public class ImbalanceService implements VolatilityListener {
         double maxImbalanceSize = imbalances.stream().max(Comparator.comparing(Imbalance::size)).get().size();
         currentImbalance = imbalances.stream()
                 .filter(imbalance_ -> imbalance_.size() >= maxImbalanceSize * 0.75)
+                .filter(this::isValid)
                 .max(Comparator.comparing(Imbalance::speed))
-                .orElseThrow();
+                .orElse(null);
 
-        if (isValid(currentImbalance)) {
+        if (currentImbalance != null) {
             currentState = ImbalanceState.PROGRESS;
             Log.debug(currentImbalance.getType() + " started: " + currentImbalance, seconds.lastKey());
-        } else {
-            currentImbalance = null;
         }
     }
 
@@ -272,7 +271,7 @@ public class ImbalanceService implements VolatilityListener {
     }
 
     public boolean checkPotentialEndPointCondition(long currentTime, MarketEntry currentEntry) {
-        double relevantSize = currentImbalance.size() / priceChangeThreshold;
+        double relevantSize = currentImbalance.size() / priceChangeThreshold; //TODO брать не от минимального изменения а от средней цены
         double possibleDuration = currentImbalance.duration() / relevantSize * POTENTIAL_COMPLETE_TIME_MODIFICATOR;
         if (currentTime - currentImbalance.getEndTime() < Math.max(possibleDuration, MIN_POTENTIAL_COMPLETE_TIME)) {
             return false;
@@ -292,12 +291,12 @@ public class ImbalanceService implements VolatilityListener {
                 yield (marketEntry -> marketEntry.high() > averagePrice);
             }
         };
-        if (data.subMap(currentImbalance.getEndTime(), currentTime).values().stream().anyMatch(alreadyReturnedPriceCondition)) {
+        if (seconds.subMap(currentImbalance.getEndTime(), currentTime).values().stream().anyMatch(alreadyReturnedPriceCondition)) {
             return false;
         }
 
         currentImbalance.setComputedDuration(possibleDuration);
-        calc(currentTime);
+//        calc(currentTime);
         return true;
     }
 
@@ -347,7 +346,7 @@ public class ImbalanceService implements VolatilityListener {
 
         Log.debug(String.format("new price change %.2f$ || speed %.2f$/minute", priceChangeThreshold, speedThreshold * 60_000L));
         //TODO
-        Log.debug(String.format("with volat price %.2f$ || speed %.2f$/minute", priceChangeThreshold * (100 * volatility / 0.5), speedThreshold * 60_000L * (100 * volatility / 0.5)));
+//        Log.debug(String.format("with volat price %.2f$ || speed %.2f$/minute", priceChangeThreshold * (100 * volatility / 0.5), speedThreshold * 60_000L * (100 * volatility / 0.5)));
     }
 
     public ImbalanceState getCurrentState() {

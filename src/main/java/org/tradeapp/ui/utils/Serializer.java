@@ -2,8 +2,11 @@ package org.tradeapp.ui.utils;
 
 import org.tradeapp.logging.Log;
 
-import java.io.*;
-import java.util.Arrays;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.Collection;
 import java.util.Map;
 
@@ -31,7 +34,7 @@ public class Serializer<T> {
                 Log.debug("object=" + data.toString() + " serialized");
             }
         } catch (IOException e) {
-            Log.debug(e);
+            Log.debug(e, false);
         }
     }
 
@@ -51,11 +54,7 @@ public class Serializer<T> {
             }
             return data;
         } catch (ClassNotFoundException | IOException e) {
-            Log.debug("exception got: " +
-                    e.getMessage() + "\n    at " +
-                    Arrays.stream(e.getStackTrace())
-                            .map(StackTraceElement::toString)
-                            .reduce("", (s1, s2) -> s1 + "\n    at " + s2));
+            Log.debug(e, false);
             return null;
         }
     }

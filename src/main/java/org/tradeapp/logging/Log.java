@@ -28,14 +28,20 @@ public class Log {
         log(message, Level.DEBUG);
     }
 
-    public static void debug(Exception e) {
+    public static void debug(Exception exception) {
+        debug(exception, true);
+    }
+
+    public static void debug(Exception exception, boolean rethrow) {
         log("exception got: " +
-                e.getMessage() +
-                Arrays.stream(e.getStackTrace())
-                        .map(StackTraceElement::toString)
-                        .reduce("", (s1, s2) -> s1 + "\n    at " + s2),
+                        exception.getMessage() +
+                        Arrays.stream(exception.getStackTrace())
+                                .map(StackTraceElement::toString)
+                                .reduce("", (s1, s2) -> s1 + "\n    at " + s2),
                 Level.DEBUG);
-        throw new RuntimeException(e);
+        if (rethrow) {
+            throw new RuntimeException(exception);
+        }
     }
 
     public static void info(String message) {

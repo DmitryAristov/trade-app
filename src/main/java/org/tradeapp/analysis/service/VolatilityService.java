@@ -13,8 +13,8 @@ public class VolatilityService {
      * Период обновления волатильности и средней цены (1000мс * 60с * 60м * 24ч = 1 день)
      */
     private static final long UPDATE_TIME_PERIOD_MILLS = 24L * 60L * 60L * 1000L;
-    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 5;
-    private static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 5;
+    private static final int VOLATILITY_CALCULATE_DAYS_COUNT = 1;
+    private static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 1;
 
     private long lastUpdateTime = -1L;
 

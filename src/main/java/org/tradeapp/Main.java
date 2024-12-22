@@ -11,17 +11,6 @@ import org.tradeapp.ui.utils.Serializer;
 
 import java.util.TreeMap;
 
-//TODO может быть что на бОльшем времени это уже возврат, тогда на текущем возврата может вообще не быть, или нужно реагировать гораздо медленнее (х2).
-// Открываться только какую то часть времени от длины имбаланса.
-// .
-// .
-// Проверка если цена уже вернулась до открытия то не открываться. (!!!!!!!!!!!!!) - DONE
-// 3 тейка (!!!!!!!!!!!!1)
-// Понизить границу взятия с 0.2 на поменьше. Протестировать значения
-// .
-// .
-// Проверка скорости и валидности в процессе имбаланса, а не только при старте
-// Собрать данные за все имбалансы за три года, собрать результаты calc и построить функцию(и) зависимости potentialCompleteTime от размера имбаланса по цене и времени
 public class Main {
     public static final String PEZDA = """
             
@@ -40,13 +29,13 @@ public class Main {
     public static final ObjectMapper MAPPER = new ObjectMapper();
     public static final Log.Level LOG_LEVEL = Log.Level.INFO;
 
-    public static final int HISTORICAL_DATA_SIZE = 1100;
+    public static final int HISTORICAL_DATA_SIZE = 60;
     public static final String SYMBOL = "BTCUSDT";
 
     /**
      * Офлайн мод. Если не нужно обновлять рыночные данные и UI данные или если нет сети.
      */
-    public static final boolean SKIP_MARKET_DATA_UPDATE = true;
+    public static final boolean SKIP_MARKET_DATA_UPDATE = false;
 
     public static final long UI_DATA_INTERVAL = 15 * 60_000L;
     public static final String UI_DATA_INTERVAL_STRING = "15m";
@@ -56,11 +45,11 @@ public class Main {
     }
 
     private static final MarketDataLoader<TreeMap<Long, MarketKlineEntry>> uiMarketDataLoader = new MarketDataLoader<>(
-            new Serializer<>("/src/main/resources/ui-data/"),
+            new Serializer<>("/src/main/resources/ui-data/sub-data/"),
             UI_DATA_INTERVAL,
             ExchangeRequestService::performBinanceUiMarketDataRequest);
     private static final MarketDataLoader<TreeMap<Long, MarketEntry>> analyseMarketDataLoader = new MarketDataLoader<>(
-            new Serializer<>("/src/main/resources/market-data/"),
+            new Serializer<>("/src/main/resources/market-data/sub-data/"),
             1000L,
             ExchangeRequestService::performBinanceMarketDataRequest);
 

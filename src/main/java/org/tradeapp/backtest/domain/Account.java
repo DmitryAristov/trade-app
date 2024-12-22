@@ -4,8 +4,8 @@ import org.tradeapp.logging.Log;
 
 public class Account {
     private static final int BALANCE = 10000;
-    private static final double RISK_LEVEL = 0.5;
-    private static final int CREDIT_LEVEL = 12;
+    private static final double RISK_LEVEL = 1.;
+    private static final int CREDIT_LEVEL = 6;
 
     private double balance;
     private final double riskPercentage;
