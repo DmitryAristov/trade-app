@@ -10,35 +10,12 @@ import org.tradeapp.ui.utils.TimeFormatter;
 import java.util.*;
 import java.util.function.Predicate;
 
+import static org.tradeapp.backtest.constants.Constants.*;
+
 public class ImbalanceService implements VolatilityListener {
 
-    /**
-     * Время хранения ежесекундных данных (1000мс * 60с * 5м = 5 минут).
-     * Отдельная коллекция для поиска окончания размером 120 секунд.
-     */
-    public static final long DATA_LIVE_TIME = 10 * 60_000L;
-    public static final long LARGE_DATA_LIVE_TIME = 60 * 60_000L;
-    public static final long LARGE_DATA_ENTRY_SIZE = 15_000L;
 
-    /**
-     * Время за которое если не появилось нового минимума то считаем имбаланс завершенным (1000мс * 60с = 1 минута)
-     */
-    public static final double COMPLETE_TIME_MODIFICATOR = 0.5;
-    public static final double POTENTIAL_COMPLETE_TIME_MODIFICATOR = 0.05; //TODO для быстрых и медленных нужна разная формула
-
-    /**
-     * Константы для расчета минимальной скорости и цены.
-     * Формула: минимальная цена/скорость = [средняя цена] * [волатильность] * [константа]
-     */
-    public static final double SPEED_MODIFICATOR = 1E-7, PRICE_MODIFICATOR = 0.02;
-
-    public static final double MAX_VALID_IMBALANCE_PART = 0.2;
-    public static final long MIN_IMBALANCE_TIME_DURATION = 10_000L;
-    public static final long TIME_CHECK_CONTR_IMBALANCE = 60 * 60_000L;
-    public static final long MIN_POTENTIAL_COMPLETE_TIME = 2_000L;
-    public static final long MIN_COMPLETE_TIME = 60_000L;
-    public static final double RETURNED_PRICE_IMBALANCE_PARTITION = 0.5;
-
+    private final Log log = new Log();
 
     /**
      * Минимальное изменение цены и минимальная скорость изменения.
@@ -61,36 +38,7 @@ public class ImbalanceService implements VolatilityListener {
 
     private final LinkedList<Imbalance> imbalances = new LinkedList<>();
 
-    public ImbalanceService() {
-        Log.info(String.format("""
-                        imbalance parameters:
-                            complete time modificator :: %.3f
-                            potential complete time modificator :: %.3f
-                            speed modificator :: %s
-                            price modificator :: %s
-                            maximum valid imbalance part when open position :: %.3f
-                            minimum imbalance time duration :: %d seconds
-                            minimum potential complete time :: %d seconds
-                            minimum complete time :: %d seconds
-                            data live time :: %d minutes
-                            large data live time :: %d minutes
-                            large data entry size :: %d seconds
-                            time in the past to check for contr-imbalance :: %d minutes
-                            already returned price imbalance partition on potential endpoint check %.3f""",
-                COMPLETE_TIME_MODIFICATOR,
-                POTENTIAL_COMPLETE_TIME_MODIFICATOR,
-                SPEED_MODIFICATOR,
-                PRICE_MODIFICATOR,
-                MAX_VALID_IMBALANCE_PART,
-                MIN_IMBALANCE_TIME_DURATION/1000,
-                MIN_POTENTIAL_COMPLETE_TIME/1000,
-                MIN_COMPLETE_TIME/1000,
-                DATA_LIVE_TIME/60_000L,
-                LARGE_DATA_LIVE_TIME/60_000L,
-                LARGE_DATA_ENTRY_SIZE/1000,
-                TIME_CHECK_CONTR_IMBALANCE/60_000L,
-                RETURNED_PRICE_IMBALANCE_PARTITION));
-    }
+    public ImbalanceService() {  }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
         updateData(currentTime, currentEntry);
@@ -194,7 +142,7 @@ public class ImbalanceService implements VolatilityListener {
 
         if (currentImbalance != null) {
             currentState = ImbalanceState.PROGRESS;
-            Log.debug(currentImbalance.getType() + " started: " + currentImbalance, seconds.lastKey());
+            log.debug(currentImbalance.getType() + " started: " + currentImbalance, currentTime);
         }
     }
 
@@ -261,7 +209,7 @@ public class ImbalanceService implements VolatilityListener {
     private boolean checkCompleteCondition(long currentTime) {
         double completeTime = currentImbalance.duration() * COMPLETE_TIME_MODIFICATOR;
         if (currentTime - currentImbalance.getEndTime() > Math.max(completeTime, MIN_COMPLETE_TIME)) {
-            Log.debug(currentImbalance.getType() + " completed: " + currentImbalance, currentTime);
+            log.debug(currentImbalance.getType() + " completed: " + currentImbalance, currentTime);
             currentImbalance.setCompleteTime(currentTime);
             currentState = ImbalanceState.COMPLETED;
 //            updateUI(currentTime);
@@ -340,13 +288,10 @@ public class ImbalanceService implements VolatilityListener {
     }
 
     @Override
-    public void notify(double volatility, double average) {
+    public void notify(double volatility, double average, long currentTime) {
         this.priceChangeThreshold = average * PRICE_MODIFICATOR;
         this.speedThreshold = average * SPEED_MODIFICATOR;
-
-        Log.debug(String.format("new price change %.2f$ || speed %.2f$/minute", priceChangeThreshold, speedThreshold * 60_000L));
-        //TODO
-//        Log.debug(String.format("with volat price %.2f$ || speed %.2f$/minute", priceChangeThreshold * (100 * volatility / 0.5), speedThreshold * 60_000L * (100 * volatility / 0.5)));
+        log.debug(String.format("new price change %.2f$ || speed %.2f$/minute", priceChangeThreshold, speedThreshold * 60_000L), currentTime);
     }
 
     public ImbalanceState getCurrentState() {
@@ -389,9 +334,9 @@ public class ImbalanceService implements VolatilityListener {
     private void calc(long currentTime_) {
         var marketData_ = data.subMap(currentImbalance.getStartTime(), currentTime_).entrySet().stream().toList();
 
-        Log.debug(currentImbalance.toString());
-        Log.debug(String.format("price %.2f$ || time %ds || speed = %.2f$/s",
-                currentImbalance.size(), currentImbalance.duration() / 1000, currentImbalance.speed() * 1000));
+        log.debug(currentImbalance.toString(), currentTime_);
+        log.debug(String.format("price %.2f$ || time %ds || speed = %.2f$/s",
+                currentImbalance.size(), currentImbalance.duration() / 1000, currentImbalance.speed() * 1000), currentTime_);
 
         for (int duration = 1; duration < 120; duration++) {
             List<PossibleCompleteAnalysisDTO> possibleCompletePoints = getPossibleCompleteAnalysisDTOS(marketData_, duration);
@@ -400,13 +345,13 @@ public class ImbalanceService implements VolatilityListener {
                 continue;
             }
 
-            Log.debug(String.format("duration = %ds || points found %d", duration, possibleCompletePoints.size()));
+            log.debug(String.format("duration = %ds || points found %d", duration, possibleCompletePoints.size()), currentTime_);
             for (PossibleCompleteAnalysisDTO possibleCompletePoint : possibleCompletePoints) {
                 double relevantSize = possibleCompletePoint.imbalance.size() / priceChangeThreshold;
                 long timeSize = possibleCompletePoint.imbalance.duration();
                 double possibleDuration = timeSize / relevantSize * POTENTIAL_COMPLETE_TIME_MODIFICATOR;
 
-                Log.debug(String.format("      open position %.2f$ on %s || imbalance price %.2f$ time %ds speed = %.2f$/s || partition = %.2f || duration = %.2fms",
+                log.debug(String.format("      open position %.2f$ on %s || imbalance price %.2f$ time %ds speed = %.2f$/s || partition = %.2f || duration = %.2fms",
                         possibleCompletePoint.currentEntry.average(),
                         TimeFormatter.format(possibleCompletePoint.currentTime),
                         possibleCompletePoint.imbalance.size(),
@@ -414,7 +359,7 @@ public class ImbalanceService implements VolatilityListener {
                         possibleCompletePoint.imbalance.speed(),
                         possibleCompletePoint.partition,
                         possibleDuration
-                ));
+                ), currentTime_);
             }
         }
     }

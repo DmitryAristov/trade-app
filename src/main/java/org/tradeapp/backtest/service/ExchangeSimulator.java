@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
  */
 public class ExchangeSimulator {
     public static final double MARKET_ORDER_TRADE_FEE = 0.00036;
+    private final Log log = new Log();
 
     private final List<Order> limitOrders;
     private final List<Position> positions;
@@ -111,7 +112,8 @@ public class ExchangeSimulator {
         Position position = new Position(order, currentEntry, currentTime);
         positions.add(position);
         account.updateBalance(position);
-        Log.debug(String.format("%s OPENED ||| price: %.2f$ ||| money: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+        log.debug(String.format("balance updated: %.2f$", account.getBalance()), currentTime);
+        log.debug(String.format("%s OPENED ||| price: %.2f$ ||| money: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
                         position.getOrder().getType(),
                         position.getOpenPrice(),
                         position.getOrder().getMoneyAmount(),
@@ -123,7 +125,8 @@ public class ExchangeSimulator {
     public void closeTake(Position position, long currentTime) {
         position.close(currentTime, position.getTakeProfitPrice());
         account.updateBalance(position);
-        Log.debug(String.format("%s CLOSED ||| P&L++++: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+        log.debug(String.format("balance updated: %.2f$", account.getBalance()), currentTime);
+        log.debug(String.format("%s CLOSED ||| P&L++++: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
                         position.getOrder().getType(),
                         position.getProfitLoss(),
                         position.getClosePrice(),
@@ -136,7 +139,8 @@ public class ExchangeSimulator {
     public void closeLoss(Position position, long currentTime) {
         position.close(currentTime, position.getStopLossPrice());
         account.updateBalance(position);
-        Log.debug(String.format("%s CLOSED ||| P&L----: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
+        log.debug(String.format("balance updated: %.2f$", account.getBalance()), currentTime);
+        log.debug(String.format("%s CLOSED ||| P&L----: %.2f$ ||| price: %.2f$ ||| fee: %.2f$ ||| balance: %.2f$ |||",
                         position.getOrder().getType(),
                         position.getProfitLoss(),
                         position.getClosePrice(),

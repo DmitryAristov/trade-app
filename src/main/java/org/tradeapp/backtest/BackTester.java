@@ -7,19 +7,19 @@ import org.tradeapp.backtest.service.Strategy;
 import org.tradeapp.logging.Log;
 import org.tradeapp.marketdata.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
-import org.tradeapp.ui.utils.Serializer;
-import org.tradeapp.ui.utils.TradingVueJsonUpdater;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.tradeapp.logging.Log.logProgress;
+import static org.tradeapp.backtest.constants.Constants.*;
 
 /**
  * Для тестирования стратегии на предыдущих исторических данных.
  */
 public class BackTester {
+    private final Log log = new Log();
     private final ExchangeSimulator simulator;
     private final Strategy strategy;
     private final Account account;
@@ -31,14 +31,74 @@ public class BackTester {
 
     public BackTester(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
+
+        log.info(PEZDA, marketData.firstKey());
+        log.info(String.format("""
+                        account parameters:
+                            balance :: %d$
+                            risk :: %d%%
+                            credit :: %d""",
+                BALANCE, (long) (RISK_LEVEL * 100), CREDIT_LEVEL),
+                marketData.firstKey());
+
+        //noinspection ConstantValue
+        if (TAKES_COUNT > TAKE_PROFIT_THRESHOLDS.length) {
+            throw log.throwError("foreach take modifier must be defined", marketData.firstKey());
+        }
+        log.info(String.format("""
+                        strategy parameters:
+                            takes count :: %d
+                            takes modifiers :: %s
+                            stop modificator :: %.2f
+                            position live time :: %d minutes""",
+                TAKES_COUNT,
+                Arrays.toString(TAKE_PROFIT_THRESHOLDS),
+                STOP_LOSS_MODIFICATOR,
+                POSITION_LIVE_TIME / 60_000L), marketData.firstKey());
+
+        log.info(String.format("""
+                        imbalance parameters:
+                            complete time modificator :: %.3f
+                            potential complete time modificator :: %.3f
+                            speed modificator :: %s
+                            price modificator :: %s
+                            maximum valid imbalance part when open position :: %.3f
+                            minimum imbalance time duration :: %d seconds
+                            minimum potential complete time :: %d seconds
+                            minimum complete time :: %d seconds
+                            data live time :: %d minutes
+                            large data live time :: %d minutes
+                            large data entry size :: %d seconds
+                            time in the past to check for contr-imbalance :: %d minutes
+                            already returned price imbalance partition on potential endpoint check %.3f""",
+                COMPLETE_TIME_MODIFICATOR,
+                POTENTIAL_COMPLETE_TIME_MODIFICATOR,
+                SPEED_MODIFICATOR,
+                PRICE_MODIFICATOR,
+                MAX_VALID_IMBALANCE_PART,
+                MIN_IMBALANCE_TIME_DURATION/1000,
+                MIN_POTENTIAL_COMPLETE_TIME/1000,
+                MIN_COMPLETE_TIME/1000,
+                DATA_LIVE_TIME/60_000L,
+                LARGE_DATA_LIVE_TIME/60_000L,
+                LARGE_DATA_ENTRY_SIZE/1000,
+                TIME_CHECK_CONTR_IMBALANCE/60_000L,
+                RETURNED_PRICE_IMBALANCE_PARTITION), marketData.firstKey());
+        log.info(String.format("""
+                        imbalance parameters:
+                            update time period :: %d hours
+                            volatility calculation past time :: %d days
+                            average price calculation past time :: %d days""",
+                UPDATE_TIME_PERIOD_MILLS / 3_600_000L,
+                VOLATILITY_CALCULATE_DAYS_COUNT,
+                AVERAGE_PRICE_CALCULATE_DAYS_COUNT), marketData.firstKey());
+
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
         this.volatilityService = new VolatilityService();
         this.imbalanceService = new ImbalanceService();
         imbalanceService.setData(marketData);
-
         volatilityService.subscribe(this.imbalanceService);
-
         this.strategy = new Strategy(simulator, marketData, uiMarketData, imbalanceService, account);
     }
 
@@ -50,10 +110,10 @@ public class BackTester {
 //        long firstKey = 1666675517000L;
 //        long lastKey = 1688032229000L;
 
-        Log.info(String.format("starting backtest with balance %.2f$", account.getBalance()));
+        log.info(String.format("starting backtest with balance %.2f$", account.getBalance()), firstKey);
         try {
             marketData
-//                    .subMap(firstKey, lastKey)
+                    .subMap(firstKey, lastKey)
                     .forEach((currentTime, currentEntry) -> {
                         volatilityService.onTick(currentTime, currentEntry);
                         imbalanceService.onTick(currentTime, currentEntry);
@@ -61,16 +121,12 @@ public class BackTester {
                         simulator.onTick(currentTime, currentEntry);
 
                         double progress = ((double) (currentTime - firstKey)) / ((double) (lastKey - firstKey));
-                        logProgress(startTime, step, progress, "backtest");
+                        log.logProgress(startTime, step, progress, "backtest", currentTime);
                     });
             volatilityService.unsubscribeAll();
         } catch (Exception e) {
-            Log.debug(e);
-        } finally {
-            TradingVueJsonUpdater.serializeAll(imbalanceService.getImbalances(), simulator.getPositions());
-//            Serializer<TreeMap<Long, MarketEntry>> serializer = new Serializer<>("/src/main/resources/market-data/sub-data/");
-//            serializer.serialize(new TreeMap<>(marketData.subMap(firstKey, lastKey)));
+            log.error("", e, lastKey);
         }
-        Log.info(String.format("backtest finished with balance %.2f$", account.getBalance()));
+        log.info(String.format("backtest finished with balance %.2f$", account.getBalance()), lastKey);
     }
 }

@@ -17,30 +17,30 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.tradeapp.Main.MAPPER;
+import static org.tradeapp.backtest.constants.Constants.mapper;
 
 /**
  * Временный класс только для отображения в UI
  */
 public class TradingVueJsonUpdater {
 
+    private final Log log = new Log();
     private final String filePath;
-
 
     public TradingVueJsonUpdater(String filePath) {
         this.filePath = filePath;
     }
 
-    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/src/main/resources/results/positions/");
-    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/src/main/resources/results/imbalances/");
+    private static final Serializer<List<Position>> positionSerializer = new Serializer<>("/output/results/positions/");
+    private static final Serializer<List<Imbalance>> imbalanceSerializer = new Serializer<>("/output/results/imbalances/");
 
     public void updateUiMarketData(TreeMap<Long, MarketKlineEntry> uiMarketData) {
-        Log.debug("ohlcv with:");
-        Log.debug(uiMarketData.size() + " uiMarketData");
+        log.debug("ohlcv with:");
+        log.debug(uiMarketData.size() + " uiMarketData");
 
-        final ArrayNode ohlcv = MAPPER.createArrayNode();
+        final ArrayNode ohlcv = mapper.createArrayNode();
         uiMarketData.forEach((key, value) -> {
-            ArrayNode entryNode = MAPPER.createArrayNode();
+            ArrayNode entryNode = mapper.createArrayNode();
             entryNode.add(value.getOpenTime());
             entryNode.add(value.getOpenPrice());
             entryNode.add(value.getHighPrice());
@@ -52,18 +52,18 @@ public class TradingVueJsonUpdater {
 
         try {
             File file = new File(filePath);
-            JsonNode rootNode = MAPPER.readTree(file);
+            JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("ohlcv")) {
                 ((ObjectNode) rootNode).set("ohlcv", ohlcv);
             }
             if (rootNode.has("onchart")) {
-                ((ObjectNode) rootNode).set("onchart", MAPPER.createArrayNode());
+                ((ObjectNode) rootNode).set("onchart", mapper.createArrayNode());
             }
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            Log.debug(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -92,11 +92,11 @@ public class TradingVueJsonUpdater {
     }
 
     public void updateAnalysedData(List<Imbalance> imbalances, List<Position> positions) {
-        Log.debug("onchart with:");
-        Log.debug(imbalances.size() + " imbalances");
-        Log.debug(positions.size() + " positions");
+        log.debug("onchart with:");
+        log.debug(imbalances.size() + " imbalances");
+        log.debug(positions.size() + " positions");
 
-        final ArrayNode onchart = MAPPER.createArrayNode();
+        final ArrayNode onchart = mapper.createArrayNode();
 
         if (!imbalances.isEmpty()) {
             parseImbalances(imbalances, onchart);
@@ -108,17 +108,17 @@ public class TradingVueJsonUpdater {
 
         try {
             File file = new File(filePath);
-            JsonNode rootNode = MAPPER.readTree(file);
+            JsonNode rootNode = mapper.readTree(file);
 
             if (rootNode.has("onchart")) {
                 ((ObjectNode) rootNode).set("onchart", onchart);
             } else {
                 ((ObjectNode) rootNode).putIfAbsent("onchart", onchart);
             }
-            MAPPER.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(file, rootNode);
 
         } catch (IOException e) {
-            Log.debug(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -129,15 +129,15 @@ public class TradingVueJsonUpdater {
 
             /* две вертикальные линии показывающие границы имбаланса по времени */
             {
-                ArrayNode data = MAPPER.createArrayNode();
-                ArrayNode start = MAPPER.createArrayNode();
+                ArrayNode data = mapper.createArrayNode();
+                ArrayNode start = mapper.createArrayNode();
                 start.add(imbalance.getStartTime());
                 start.add("Imbalance");
                 start.add(0);
                 start.add("#080469");
                 start.add(0.05);
 
-                ArrayNode end = MAPPER.createArrayNode();
+                ArrayNode end = mapper.createArrayNode();
                 end.add(imbalance.getEndTime());
                 end.add("Imbalance");
                 end.add(1);
@@ -154,17 +154,17 @@ public class TradingVueJsonUpdater {
 
                 Onchart splitter = new Onchart("", "Splitters", data, settingsSplitters);
 
-                ObjectNode onchartSplitter = MAPPER.valueToTree(splitter);
+                ObjectNode onchartSplitter = mapper.valueToTree(splitter);
                 onchart.add(onchartSplitter);
             }
 
             /* две горизонтальные линии показывающие границы имбаланса по цене + центр */
             {
-                ArrayNode p1NodeStart = MAPPER.createArrayNode();
+                ArrayNode p1NodeStart = mapper.createArrayNode();
                 p1NodeStart.add(imbalance.getStartTime());
                 p1NodeStart.add(imbalance.getStartPrice());
 
-                ArrayNode p2NodeStart = MAPPER.createArrayNode();
+                ArrayNode p2NodeStart = mapper.createArrayNode();
                 p2NodeStart.add(imbalance.getEndTime());
                 p2NodeStart.add(imbalance.getStartPrice());
 
@@ -182,16 +182,16 @@ public class TradingVueJsonUpdater {
                         imbalance.size(),
                         imbalance.duration(),
                         imbalance.getComputedDuration());
-                Onchart onchartStart = new Onchart(onchartStartName, "Segment", MAPPER.createArrayNode(), settingsStart);
+                Onchart onchartStart = new Onchart(onchartStartName, "Segment", mapper.createArrayNode(), settingsStart);
 
-                ObjectNode segmentNodeStart = MAPPER.valueToTree(onchartStart);
+                ObjectNode segmentNodeStart = mapper.valueToTree(onchartStart);
                 onchart.add(segmentNodeStart);
 
-                ArrayNode p1NodeCenter = MAPPER.createArrayNode();
+                ArrayNode p1NodeCenter = mapper.createArrayNode();
                 p1NodeCenter.add(imbalance.getStartTime());
                 p1NodeCenter.add((imbalance.getStartPrice() + imbalance.getEndPrice()) / 2.);
 
-                ArrayNode p2NodeCenter = MAPPER.createArrayNode();
+                ArrayNode p2NodeCenter = mapper.createArrayNode();
                 p2NodeCenter.add(imbalance.getEndTime());
                 p2NodeCenter.add((imbalance.getStartPrice() + imbalance.getEndPrice()) / 2.);
 
@@ -202,16 +202,16 @@ public class TradingVueJsonUpdater {
                 settingsCenter.color = "#000000";
                 settingsCenter.legend = false;
 
-                Onchart onchartCenter = new Onchart("", "Segment", MAPPER.createArrayNode(), settingsCenter);
+                Onchart onchartCenter = new Onchart("", "Segment", mapper.createArrayNode(), settingsCenter);
 
-                ObjectNode segmentNodeCenter = MAPPER.valueToTree(onchartCenter);
+                ObjectNode segmentNodeCenter = mapper.valueToTree(onchartCenter);
                 onchart.add(segmentNodeCenter);
 
-                ArrayNode p1NodeEnd = MAPPER.createArrayNode();
+                ArrayNode p1NodeEnd = mapper.createArrayNode();
                 p1NodeEnd.add(imbalance.getStartTime());
                 p1NodeEnd.add(imbalance.getEndPrice());
 
-                ArrayNode p2NodeEnd = MAPPER.createArrayNode();
+                ArrayNode p2NodeEnd = mapper.createArrayNode();
                 p2NodeEnd.add(imbalance.getEndTime());
                 p2NodeEnd.add(imbalance.getEndPrice());
 
@@ -222,17 +222,17 @@ public class TradingVueJsonUpdater {
                 settingsEnd.color = "#000000";
                 settingsEnd.legend = false;
 
-                Onchart onchartEnd = new Onchart("", "Segment", MAPPER.createArrayNode(), settingsEnd);
+                Onchart onchartEnd = new Onchart("", "Segment", mapper.createArrayNode(), settingsEnd);
 
-                ObjectNode segmentNodeEnd = MAPPER.valueToTree(onchartEnd);
+                ObjectNode segmentNodeEnd = mapper.valueToTree(onchartEnd);
                 onchart.add(segmentNodeEnd);
             }
 
             /* две горизонтальные линии показывающие границы имбаланса по цене + центр */
             {
-                ArrayNode data = MAPPER.createArrayNode();
+                ArrayNode data = mapper.createArrayNode();
 
-                ArrayNode first = MAPPER.createArrayNode();
+                ArrayNode first = mapper.createArrayNode();
                 first.add(imbalance.getStartTime());
                 first.add(0);
                 first.add(Double.parseDouble(String.format("%.2f", imbalance.getStartPrice())));
@@ -240,7 +240,7 @@ public class TradingVueJsonUpdater {
                         imbalance.getType() == Imbalance.Type.UP ? imbalance.getStartPrice() - imbalance.size() * 0.02 : imbalance.getStartPrice()));
                 data.add(first);
 
-                ArrayNode second = MAPPER.createArrayNode();
+                ArrayNode second = mapper.createArrayNode();
                 second.add(imbalance.getEndTime());
                 second.add(0);
                 second.add(Double.parseDouble(String.format("%.2f", imbalance.getEndPrice())));
@@ -255,7 +255,7 @@ public class TradingVueJsonUpdater {
 
                 Onchart onchartPriceLabels = new Onchart("", "Trades", data, settingsPriceLabels);
 
-                ObjectNode segmentNodePriceLabels = MAPPER.valueToTree(onchartPriceLabels);
+                ObjectNode segmentNodePriceLabels = mapper.valueToTree(onchartPriceLabels);
                 onchart.add(segmentNodePriceLabels);
             }
         }
@@ -264,16 +264,16 @@ public class TradingVueJsonUpdater {
     private static void parsePositions(List<Position> positions, ArrayNode onchart) {
 
         for (Position position : positions) {
-            ArrayNode data = MAPPER.createArrayNode();
+            ArrayNode data = mapper.createArrayNode();
 
-            ArrayNode open = MAPPER.createArrayNode();
+            ArrayNode open = mapper.createArrayNode();
             open.add(position.getOpenTime());
             open.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
             open.add(Double.parseDouble(String.format("%.2f", position.getOpenPrice())));
             open.add(String.format("OPEN with price %.2f$", position.getOpenPrice()));
             data.add(open);
 
-            ArrayNode close = MAPPER.createArrayNode();
+            ArrayNode close = mapper.createArrayNode();
             close.add(position.getCloseTime());
             close.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
             close.add(Double.parseDouble(String.format("%.2f", position.getClosePrice())));
@@ -287,7 +287,7 @@ public class TradingVueJsonUpdater {
             settingsOpen.legend = false;
 
             Onchart onchartOpen = new Onchart("Trade", "Trades", data, settingsOpen);
-            ObjectNode segmentNodeOpen = MAPPER.valueToTree(onchartOpen);
+            ObjectNode segmentNodeOpen = mapper.valueToTree(onchartOpen);
             onchart.add(segmentNodeOpen);
         }
 
@@ -296,8 +296,8 @@ public class TradingVueJsonUpdater {
         Settings settingsProfitLoss = new Settings();
         settingsProfitLoss.markerSize = 1;
         settingsProfitLoss.legend = true;
-        Onchart onchartProfitLoss = new Onchart(onchartName, "Segment", MAPPER.createArrayNode(), settingsProfitLoss);
-        ObjectNode segmentNodeProfitLoss = MAPPER.valueToTree(onchartProfitLoss);
+        Onchart onchartProfitLoss = new Onchart(onchartName, "Segment", mapper.createArrayNode(), settingsProfitLoss);
+        ObjectNode segmentNodeProfitLoss = mapper.valueToTree(onchartProfitLoss);
         onchart.add(segmentNodeProfitLoss);
     }
 

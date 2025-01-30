@@ -1,7 +1,6 @@
 package org.tradeapp.marketdata.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.tradeapp.logging.Log;
 import org.tradeapp.marketdata.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
 
@@ -12,8 +11,9 @@ import java.net.URI;
 import java.net.URL;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
-import static org.tradeapp.Main.*;
+import static org.tradeapp.backtest.constants.Constants.*;
 
 
 /**
@@ -21,18 +21,25 @@ import static org.tradeapp.Main.*;
  */
 public class ExchangeRequestService {
 
-    /**
-     * Bybit API предоставляет минимум минутные исторические данные
-     */
-    public static TreeMap<Long, MarketKlineEntry> performBinanceUiMarketDataRequest(long start, int limit) {
-        List<List<Object>> klineDataList = performBinanceMarketDataRequest(UI_DATA_INTERVAL_STRING, start, limit);
+//    /**
+//     * Bybit API предоставляет минимум минутные исторические данные
+//     */
+//    public static TreeMap<Long, MarketKlineEntry> performBinanceUiMarketDataRequest(long start, int limit) {
+//        List<List<Object>> klineDataList = performBinanceMarketDataRequest(UI_DATA_INTERVAL_STRING, start, limit);
+//
+//        TreeMap<Long, MarketKlineEntry> priceMap = new TreeMap<>();
+//        for (List<Object> kline : klineDataList) {
+//            MarketKlineEntry marketKlineEntry = getMarketKlineEntry(kline);
+//            priceMap.put(marketKlineEntry.getOpenTime(), marketKlineEntry);
+//        }
+//        return priceMap;
+//    }
 
-        TreeMap<Long, MarketKlineEntry> priceMap = new TreeMap<>();
-        for (List<Object> kline : klineDataList) {
-            MarketKlineEntry marketKlineEntry = getMarketKlineEntry(kline);
-            priceMap.put(marketKlineEntry.getOpenTime(), marketKlineEntry);
-        }
-        return priceMap;
+    /**
+     * Binance API предоставляет ежесекундные исторические данные
+     */
+    public static TreeMap<Long, MarketEntry> performBinanceMarketDataRequest(long start, int limit) {
+        return performBinanceVMarketDataRequest("1s", start, limit);
     }
 
     public static TreeMap<Long, MarketEntry> performBinanceVMarketDataRequest(String interval, long start, int limit) {
@@ -49,13 +56,6 @@ public class ExchangeRequestService {
             priceMap.put(openTime, new MarketEntry(highPrice, lowPrice, volume));
         }
         return priceMap;
-    }
-
-    /**
-     * Binance API предоставляет ежесекундные исторические данные
-     */
-    public static TreeMap<Long, MarketEntry> performBinanceMarketDataRequest(long start, int limit) {
-        return performBinanceVMarketDataRequest("1s", start, limit);
     }
 
     private static MarketKlineEntry getMarketKlineEntry(List<Object> kline) {
@@ -89,20 +89,21 @@ public class ExchangeRequestService {
             URL url = uri.toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
-
-            BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
-            String inputLine;
-            StringBuilder response = new StringBuilder();
-
-            while ((inputLine = in.readLine()) != null) {
-                response.append(inputLine);
+            int responseCode = connection.getResponseCode();
+            if (responseCode >= 200 && responseCode < 300) {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    String response = reader.lines().collect(Collectors.joining());
+                    return mapper.readValue(response, new TypeReference<>() {});
+                }
+            } else {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getErrorStream()))) {
+                    String errorResponse = reader.lines().collect(Collectors.joining());
+                    throw new RuntimeException(errorResponse);
+                }
             }
-            in.close();
 
-            return MAPPER.readValue(response.toString(), new TypeReference<>() {});
         } catch (Exception e) {
-            Log.debug(e);
-            return List.of();
+            throw new RuntimeException(e);
         }
     }
 }

@@ -1,11 +1,8 @@
 package org.tradeapp.backtest.domain;
 
-import org.tradeapp.logging.Log;
+import static org.tradeapp.backtest.constants.Constants.*;
 
 public class Account {
-    private static final int BALANCE = 10000;
-    private static final double RISK_LEVEL = 1.;
-    private static final int CREDIT_LEVEL = 6;
 
     private double balance;
     private final double riskPercentage;
@@ -15,13 +12,7 @@ public class Account {
         this.balance = BALANCE;
         this.riskPercentage = RISK_LEVEL;
         this.credit = CREDIT_LEVEL;
-        Log.info(String.format("""
-                        account parameters:
-                            balance :: %d$
-                            risk :: %d%%
-                            credit :: %d""",
-                BALANCE, (long) (RISK_LEVEL * 100), CREDIT_LEVEL));
-    }
+           }
 
     public double getBalance() {
         return balance;
@@ -45,7 +36,6 @@ public class Account {
         } else {
             this.balance += position.getProfitLoss() - position.getCloseFee();
         }
-        Log.debug(String.format("balance updated: %.2f$", this.balance));
     }
 }
 

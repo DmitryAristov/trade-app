@@ -10,12 +10,12 @@ import java.util.ArrayList;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.tradeapp.logging.Log.logProgress;
-
 /**
  * Класс для анализа работы технических инструментов
  */
 public class Analyser {
+    private final Log log = new Log();
+
     private final TreeMap<Long, MarketEntry> marketData;
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
@@ -35,21 +35,21 @@ public class Analyser {
         long firstKey = marketData.firstKey();
         long lastKey = marketData.lastKey();
 
-        Log.info("starting analysis of technical instruments");
+        log.info("starting analysis of technical instruments", firstKey);
         try {
             marketData.forEach((currentTime, currentEntry) -> {
                 volatilityService.onTick(currentTime, currentEntry);
                 imbalanceService.onTick(currentTime, currentEntry);
 
                 double progress = ((double) (currentTime - firstKey)) / ((double) (lastKey - firstKey));
-                logProgress(startTime, step, progress, "analysis");
+                log.logProgress(startTime, step, progress, "analysis", currentTime);
             });
             volatilityService.unsubscribeAll();
         } catch (Exception e) {
-            Log.debug(e);
+            log.error("", e, lastKey);
         } finally {
             TradingVueJsonUpdater.serializeAll(imbalanceService.getImbalances(), new ArrayList<>());
         }
-        Log.info("analysis of technical instruments finished");
+        log.info("analysis of technical instruments finished", lastKey);
     }
 }

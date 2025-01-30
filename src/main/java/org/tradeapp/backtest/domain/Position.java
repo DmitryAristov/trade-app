@@ -1,6 +1,5 @@
 package org.tradeapp.backtest.domain;
 
-import org.tradeapp.logging.Log;
 import org.tradeapp.marketdata.domain.MarketEntry;
 import org.tradeapp.ui.utils.TimeFormatter;
 
@@ -45,7 +44,6 @@ public class Position implements Serializable {
         this.stopLossPrice = order.getStopLossPrice();
         this.openFee = order.getMoneyAmount() * MARKET_ORDER_TRADE_FEE;
         this.closeFee = order.getMoneyAmount() * MARKET_ORDER_TRADE_FEE;
-        Log.debug("created: " + this);
     }
 
     /**
@@ -56,19 +54,16 @@ public class Position implements Serializable {
         this.closeTime = closeTime;
         this.isOpen = false;
         this.closeFee = amountInBTC * closePrice * MARKET_ORDER_TRADE_FEE;
-        Log.debug("closed: " + this);
     }
 
     /**
      * Посчитать прибыль/убыток без учета комиссии. Уже включено кредитное плечо
      */
     public double getProfitLoss() {
-        double profitLoss = switch (order.getType()) {
+        return switch (order.getType()) {
             case LONG -> (closePrice - openPrice) * amountInBTC;
             case SHORT -> (openPrice - closePrice) * amountInBTC;
         };
-        Log.debug(String.format("profitLoss :: %.2f$", profitLoss));
-        return profitLoss;
     }
 
     /**

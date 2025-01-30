@@ -15,6 +15,8 @@ import org.tradeapp.ui.utils.TradingVueJsonUpdater;
 
 import java.util.*;
 
+import static org.tradeapp.backtest.constants.Constants.*;
+
 /**
  * Класс описывающий стратегию открытия и закрытия сделок на основе технического анализа
  */
@@ -34,16 +36,7 @@ public class Strategy {
         WAIT_POSITIONS_CLOSED
     }
 
-    /**
-     * Части от размера имбаланса для первого и второго тейка в случае если закрытие одной позиции происходит по частям.
-     *  Пример: имбаланс был 55000$ -> 59000$. Тогда его размер = 4000$.
-     *          При SHORT сделке первый тейк будет выставлен на 59000 - 4000 * 0.4 = 57400$.
-     */
-    private static final int TAKES_COUNT = 2;
-    private static final double[] TAKE_PROFIT_THRESHOLDS = new double[]{0.5, 0.75};
-    private static final double STOP_LOSS_MODIFICATOR = 0.01;
-    private static final long POSITION_LIVE_TIME = 240 * 60_000L;
-
+    private final Log log = new Log();
     private final ExchangeSimulator simulator;
     private final TreeMap<Long, MarketEntry> marketData;
     private final TreeMap<Long, MarketKlineEntry> uiMarketData;
@@ -63,21 +56,6 @@ public class Strategy {
         this.uiMarketData = uiMarketData;
         this.imbalanceService = imbalanceService;
         this.account = account;
-        //noinspection ConstantValue
-        if (TAKES_COUNT > TAKE_PROFIT_THRESHOLDS.length) {
-            throw new RuntimeException("foreach take modifier must be defined");
-        }
-
-        Log.info(String.format("""
-                        strategy parameters:
-                            takes count :: %d
-                            takes modifiers :: %s
-                            stop modificator :: %.2f
-                            position live time :: %d minutes""",
-                TAKES_COUNT,
-                Arrays.toString(TAKE_PROFIT_THRESHOLDS),
-                STOP_LOSS_MODIFICATOR,
-                POSITION_LIVE_TIME/60_000L));
     }
 
     public void onTick(long currentTime, MarketEntry currentEntry) {
@@ -164,16 +142,12 @@ public class Strategy {
 
     private boolean openPositions(long currentTime, MarketEntry currentEntry) {
         if (!simulator.getOpenPositions().isEmpty()) {
-            throw new RuntimeException("Trying to open position while already opened " + simulator.getOpenPositions().size());
+            throw log.throwError("Trying to open position while already opened", currentTime);
         }
-//        if (openTimes >= 3) {
-//            Log.debug("too much attempts for this imbalance");
-//            return false;
-//        }
 
         Imbalance imbalance = imbalanceService.getCurrentImbalance();
         double imbalanceSize = imbalance.size();
-        Log.debug("imbalance when open position :: " + imbalance);
+        log.debug("imbalance when open position :: " + imbalance, currentTime);
 
         List<Order> marketOrders = new ArrayList<>();
         for (int i = 0; i < TAKES_COUNT; i++) {
@@ -208,9 +182,10 @@ public class Strategy {
     private void closeByTimeout(long currentTime, MarketEntry currentEntry, List<Position> positions) {
         positions.forEach(position -> {
             if (currentTime - position.getOpenTime() > POSITION_LIVE_TIME) {
-                Log.debug(String.format("close positions with timeout %d minutes", POSITION_LIVE_TIME / 60_000L));
+                log.debug(String.format("close positions with timeout %d minutes", POSITION_LIVE_TIME / 60_000L), currentTime);
                 position.close(currentTime, currentEntry.average());
                 account.updateBalance(position);
+                log.debug(String.format("balance updated: %.2f$", account.getBalance()), currentTime);
             }
         });
     }
