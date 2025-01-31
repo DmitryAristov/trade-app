@@ -1,7 +1,5 @@
 package org.tradeapp.backtest.domain;
 
-import org.tradeapp.analysis.domain.Imbalance;
-import org.tradeapp.marketdata.domain.MarketEntry;
 import org.tradeapp.ui.utils.TimeFormatter;
 
 import java.io.Serializable;

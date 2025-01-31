@@ -1,6 +1,6 @@
 package org.tradeapp.ui.utils;
 
-import org.tradeapp.logging.Log;
+import org.tradeapp.utils.Log;
 
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -10,8 +10,9 @@ import java.io.ObjectOutputStream;
 import java.util.Collection;
 import java.util.Map;
 
-import static org.tradeapp.backtest.constants.Constants.SYMBOL;
+import static org.tradeapp.backtest.constants.Settings.SYMBOL;
 
+@Deprecated
 public class Serializer<T> {
 
     private final Log log = new Log();
@@ -35,7 +36,7 @@ public class Serializer<T> {
                 log.debug("object=" + data.toString() + " serialized");
             }
         } catch (IOException e) {
-            log.error(e.getMessage());
+//            log.error(e.getMessage());
         }
     }
 
@@ -55,7 +56,7 @@ public class Serializer<T> {
             }
             return data;
         } catch (ClassNotFoundException | IOException e) {
-            log.error(e.getMessage());
+//            log.error(e.getMessage());
             return null;
         }
     }

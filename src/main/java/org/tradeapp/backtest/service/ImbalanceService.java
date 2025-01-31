@@ -1,16 +1,16 @@
-package org.tradeapp.analysis.service;
+package org.tradeapp.backtest.service;
 
-import org.tradeapp.analysis.domain.Imbalance;
-import org.tradeapp.analysis.domain.ImbalanceState;
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.backtest.domain.Imbalance;
+import org.tradeapp.backtest.domain.ImbalanceState;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 import org.tradeapp.ui.utils.TradingVueJsonUpdater;
 import org.tradeapp.ui.utils.TimeFormatter;
 
 import java.util.*;
 import java.util.function.Predicate;
 
-import static org.tradeapp.backtest.constants.Constants.*;
+import static org.tradeapp.backtest.constants.Settings.*;
 
 public class ImbalanceService implements VolatilityListener {
 

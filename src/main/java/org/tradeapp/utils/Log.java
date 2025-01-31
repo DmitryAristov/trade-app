@@ -1,4 +1,4 @@
-package org.tradeapp.logging;
+package org.tradeapp.utils;
 
 import org.tradeapp.ui.utils.TimeFormatter;
 
@@ -15,14 +15,14 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.tradeapp.backtest.constants.Constants.SYMBOL;
-import static org.tradeapp.logging.Log.Level.*;
+import static org.tradeapp.utils.Log.Level.*;
 
 public class Log {
 
     public enum Level {
         DEBUG,
         INFO,
+        WARN,
         ERROR
     }
 
@@ -57,8 +57,12 @@ public class Log {
         log(message, INFO, mills);
     }
 
-    public void error(String message) {
-        log(message, ERROR);
+    public void error(String message, long mills) {
+        log(message, ERROR, mills);
+    }
+
+    public void warn(String message, long mills) {
+        log(message, WARN, mills);
     }
 
     public RuntimeException throwError(String message, long mills) {
@@ -88,9 +92,10 @@ public class Log {
             Instant approximateEndUTC = Instant.ofEpochMilli(startTime).plusMillis(
                     Math.round((Instant.now().toEpochMilli() - startTime) / progress));
 
-            info(String.format("operation '%s' progress %.2f%%. Will done ~ %s", operationName, progress * 100,
-                    TimeFormatter.format(approximateEndUTC)), mills);
+            String logEntry = String.format("operation '%s' progress %.2f%%. Will done ~ %s", operationName, progress * 100,
+                    TimeFormatter.format(approximateEndUTC));
 
+            info(logEntry, mills);
             step.addAndGet(15_000L);
         }
     }
@@ -120,15 +125,20 @@ public class Log {
 
     private void log(String message, Level level, long mills) {
         String classAndMethodName = getClassAndMethod();
-        String logEntry = "[" + TimeFormatter.now() + "] " + level + (level == INFO ? "  " : " ") + "(" + mills + ")" + classAndMethodName + message;
-        writeLogFile(logEntry, mills);
+        if (mills != -1) {
+            String logEntry = "[" + TimeFormatter.now() + "] " + level + (level == INFO ? "  " : " ") + "(" + mills + ")" +
+                    classAndMethodName + message + " on " + TimeFormatter.format(mills);
+            writeLogFile(logEntry, mills);
+            if (level != DEBUG)
+                System.out.println(logEntry);
+        }
     }
 
     private void writeLogFile(String logEntry, long mills) {
         ZonedDateTime zonedDateTime = Instant.ofEpochMilli(mills).atZone(ZoneId.of("UTC"));
         int year = zonedDateTime.getYear();
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOGS_DIR_PATH + SYMBOL + "_" + year, true))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOGS_DIR_PATH + "output_" + year + ".log", true))) {
             writer.write(logEntry);
             writer.newLine();
         } catch (IOException e) {

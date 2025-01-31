@@ -1,4 +1,4 @@
-package org.tradeapp.marketdata.domain;
+package org.tradeapp.backtest.domain;
 
 import java.io.Serializable;
 

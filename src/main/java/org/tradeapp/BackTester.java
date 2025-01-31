@@ -1,35 +1,41 @@
-package org.tradeapp.backtest;
+package org.tradeapp;
 
-import org.tradeapp.analysis.service.*;
+import org.tradeapp.backtest.binance.APIService;
+import org.tradeapp.backtest.binance.HttpClient;
 import org.tradeapp.backtest.domain.Account;
-import org.tradeapp.backtest.service.ExchangeSimulator;
-import org.tradeapp.backtest.service.Strategy;
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.backtest.service.*;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.tradeapp.backtest.constants.Constants.*;
+import static org.tradeapp.backtest.constants.Settings.*;
 
 /**
  * Для тестирования стратегии на предыдущих исторических данных.
  */
 public class BackTester {
+    public static final boolean SKIP_MARKET_DATA_UPDATE = true;
+
     private final Log log = new Log();
+
     private final ExchangeSimulator simulator;
     private final Strategy strategy;
     private final Account account;
-
-    private final TreeMap<Long, MarketEntry> marketData;
-
     private final VolatilityService volatilityService;
     private final ImbalanceService imbalanceService;
+    private final TreeMap<Long, MarketEntry> marketData;
 
-    public BackTester(TreeMap<Long, MarketEntry> marketData, TreeMap<Long, MarketKlineEntry> uiMarketData) {
+    public BackTester(String symbol,
+                      APIService apiService,
+                      TreeMap<Long, MarketEntry> marketData,
+                      TreeMap<Long, MarketKlineEntry> uiMarketData) {
         this.marketData = marketData;
 
         log.info(PEZDA, marketData.firstKey());
@@ -90,12 +96,12 @@ public class BackTester {
                             volatility calculation past time :: %d days
                             average price calculation past time :: %d days""",
                 UPDATE_TIME_PERIOD_MILLS / 3_600_000L,
-                VOLATILITY_CALCULATE_DAYS_COUNT,
-                AVERAGE_PRICE_CALCULATE_DAYS_COUNT), marketData.firstKey());
+                VOLATILITY_CALCULATE_PAST_TIME_DAYS,
+                AVERAGE_PRICE_CALCULATE_PAST_TIME_DAYS), marketData.firstKey());
 
         this.account = new Account();
         this.simulator = new ExchangeSimulator(account);
-        this.volatilityService = new VolatilityService();
+        this.volatilityService = new VolatilityService(symbol, apiService);
         this.imbalanceService = new ImbalanceService();
         imbalanceService.setData(marketData);
         volatilityService.subscribe(this.imbalanceService);
@@ -110,6 +116,9 @@ public class BackTester {
 //        long firstKey = 1666675517000L;
 //        long lastKey = 1688032229000L;
 
+        ZonedDateTime zonedDateTime = Instant.ofEpochMilli(firstKey).atZone(ZoneId.of("UTC"));
+        int year = zonedDateTime.getYear();
+
         log.info(String.format("starting backtest with balance %.2f$", account.getBalance()), firstKey);
         try {
             marketData
@@ -121,12 +130,30 @@ public class BackTester {
                         simulator.onTick(currentTime, currentEntry);
 
                         double progress = ((double) (currentTime - firstKey)) / ((double) (lastKey - firstKey));
-                        log.logProgress(startTime, step, progress, "backtest", currentTime);
+                        log.logProgress(startTime, step, progress, "backtest " + year, currentTime);
                     });
-            volatilityService.unsubscribeAll();
         } catch (Exception e) {
             log.error("", e, lastKey);
         }
         log.info(String.format("backtest finished with balance %.2f$", account.getBalance()), lastKey);
+    }
+
+    public static void main(String[] args) {
+        final HttpClient httpClient = new HttpClient();
+        final APIService apiService = new APIService(httpClient);
+
+        final FileMarketDataLoader handler = new FileMarketDataLoader(
+                System.getProperty("user.dir") + "/input/market-data/" + SYMBOL,
+                SYMBOL,
+                apiService);
+
+        if (!SKIP_MARKET_DATA_UPDATE)
+            handler.updateOrDownloadData();
+
+        for (int year = 2017; year <= 2025; year++) {
+            TreeMap<Long, MarketEntry> marketData = handler.readAllEntries(year);
+            BackTester tester = new BackTester(SYMBOL, apiService, marketData, null);
+            tester.runTests();
+        }
     }
 }

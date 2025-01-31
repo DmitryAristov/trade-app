@@ -1,6 +1,6 @@
 package org.tradeapp.backtest.domain;
 
-import static org.tradeapp.backtest.constants.Constants.*;
+import static org.tradeapp.backtest.constants.Settings.*;
 
 public class Account {
 

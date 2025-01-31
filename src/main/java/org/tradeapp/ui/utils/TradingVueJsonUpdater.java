@@ -4,11 +4,11 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.tradeapp.analysis.domain.Imbalance;
+import org.tradeapp.backtest.domain.Imbalance;
 import org.tradeapp.backtest.domain.OrderType;
 import org.tradeapp.backtest.domain.Position;
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
 
 import java.io.File;
@@ -17,7 +17,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.tradeapp.backtest.constants.Constants.mapper;
+import static org.tradeapp.backtest.constants.Settings.mapper;
 
 /**
  * Временный класс только для отображения в UI

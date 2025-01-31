@@ -1,4 +1,4 @@
-package org.tradeapp.analysis.domain;
+package org.tradeapp.backtest.domain;
 
 public enum ImbalanceState {
     WAIT,

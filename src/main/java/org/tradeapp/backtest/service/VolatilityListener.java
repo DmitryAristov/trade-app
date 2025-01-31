@@ -1,4 +1,4 @@
-package org.tradeapp.analysis.service;
+package org.tradeapp.backtest.service;
 
 public interface VolatilityListener {
     void notify(double volatility, double average, long currentTime);

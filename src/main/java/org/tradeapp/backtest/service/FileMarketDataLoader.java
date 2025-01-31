@@ -1,7 +1,8 @@
-package org.tradeapp.marketdata.service;
+package org.tradeapp.backtest.service;
 
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.backtest.binance.APIService;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -26,15 +27,19 @@ public class FileMarketDataLoader {
     private static final int MAX_ROWS_LIMIT = 1000;
     private final Log log = new Log();
 
+    private final String symbol;
     private final String filePath;
+    private final APIService apiService;
     private final long interval = 1000;
     private final long fullSize;
     private long currentSize = 0;
     private final long startTime = Instant.now().toEpochMilli();
     private final AtomicLong step = new AtomicLong(0L);
 
-    public FileMarketDataLoader(String filePath) {
+    public FileMarketDataLoader(String filePath, String symbol, APIService apiService) {
         this.filePath = filePath;
+        this.symbol = symbol;
+        this.apiService = apiService;
         this.fullSize = (Instant.now().toEpochMilli() - START_TIME) / interval;
     }
 
@@ -59,7 +64,8 @@ public class FileMarketDataLoader {
             } else {
                 limit = MAX_ROWS_LIMIT;
             }
-            TreeMap<Long, MarketEntry> result = ExchangeRequestService.performBinanceVMarketDataRequest("1s", latestEntry, limit);
+            TreeMap<Long, MarketEntry> result = apiService.getMarketDataPublicAPI(symbol, "1s", latestEntry, limit, -1).getResponse();
+//            TreeMap<Long, MarketEntry> result = ExchangeRequestService.performBinanceVMarketDataRequest("1s", latestEntry, limit);
             appendEntries(result);
 
             currentSize += result.size();

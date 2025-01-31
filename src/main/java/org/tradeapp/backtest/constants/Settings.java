@@ -1,9 +1,8 @@
 package org.tradeapp.backtest.constants;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.tradeapp.logging.Log;
 
-public class Constants {
+public class Settings {
     public static final String PEZDA = """
             
             
@@ -64,7 +63,7 @@ public class Constants {
      * Период обновления волатильности и средней цены (1000мс * 60с * 60м * 24ч = 1 день)
      */
     public static final long UPDATE_TIME_PERIOD_MILLS = 24L * 60L * 60L * 1000L;
-    public static final int VOLATILITY_CALCULATE_DAYS_COUNT = 1;
-    public static final int AVERAGE_PRICE_CALCULATE_DAYS_COUNT = 1;
+    public static final int VOLATILITY_CALCULATE_PAST_TIME_DAYS = 1;
+    public static final int AVERAGE_PRICE_CALCULATE_PAST_TIME_DAYS = 1;
 
 }

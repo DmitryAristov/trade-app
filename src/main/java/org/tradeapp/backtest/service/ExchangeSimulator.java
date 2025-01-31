@@ -4,8 +4,8 @@ import org.tradeapp.backtest.domain.Account;
 import org.tradeapp.backtest.domain.ExecutionType;
 import org.tradeapp.backtest.domain.Order;
 import org.tradeapp.backtest.domain.Position;
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 
 import java.util.ArrayList;
 import java.util.List;

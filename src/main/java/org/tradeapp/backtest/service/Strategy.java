@@ -1,21 +1,20 @@
 package org.tradeapp.backtest.service;
 
-import org.tradeapp.analysis.domain.Imbalance;
-import org.tradeapp.analysis.domain.ImbalanceState;
-import org.tradeapp.analysis.service.ImbalanceService;
+import org.tradeapp.backtest.domain.Imbalance;
+import org.tradeapp.backtest.domain.ImbalanceState;
 import org.tradeapp.backtest.domain.Account;
 import org.tradeapp.backtest.domain.ExecutionType;
 import org.tradeapp.backtest.domain.Order;
 import org.tradeapp.backtest.domain.OrderType;
 import org.tradeapp.backtest.domain.Position;
-import org.tradeapp.logging.Log;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.utils.Log;
+import org.tradeapp.backtest.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
 import org.tradeapp.ui.utils.TradingVueJsonUpdater;
 
 import java.util.*;
 
-import static org.tradeapp.backtest.constants.Constants.*;
+import static org.tradeapp.backtest.constants.Settings.*;
 
 /**
  * Класс описывающий стратегию открытия и закрытия сделок на основе технического анализа

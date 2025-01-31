@@ -1,4 +1,4 @@
-package org.tradeapp.analysis.domain;
+package org.tradeapp.backtest.domain;
 
 import org.tradeapp.ui.utils.TimeFormatter;
 

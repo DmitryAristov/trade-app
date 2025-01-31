@@ -1,7 +1,7 @@
-package org.tradeapp.marketdata.service;
+package org.tradeapp.backtest.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import org.tradeapp.marketdata.domain.MarketEntry;
+import org.tradeapp.backtest.domain.MarketEntry;
 import org.tradeapp.ui.domain.MarketKlineEntry;
 
 import java.io.BufferedReader;
@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
-import static org.tradeapp.backtest.constants.Constants.*;
+import static org.tradeapp.backtest.constants.Settings.*;
 
 
 /**
