@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.tradeapp.backtest.constants.Settings.SYMBOL;
 import static org.tradeapp.utils.Log.Level.*;
 
 public class Log {
@@ -126,8 +127,7 @@ public class Log {
     private void log(String message, Level level, long mills) {
         String classAndMethodName = getClassAndMethod();
         if (mills != -1) {
-            String logEntry = "[" + TimeFormatter.now() + "] " + level + (level == INFO ? "  " : " ") + "(" + mills + ")" +
-                    classAndMethodName + message + " on " + TimeFormatter.format(mills);
+            String logEntry = "[" + TimeFormatter.now() + "] " + level + (level != DEBUG ? "  " : " ") + classAndMethodName + message + " on " + TimeFormatter.format(mills);
             writeLogFile(logEntry, mills);
             if (level != DEBUG)
                 System.out.println(logEntry);
@@ -138,7 +138,7 @@ public class Log {
         ZonedDateTime zonedDateTime = Instant.ofEpochMilli(mills).atZone(ZoneId.of("UTC"));
         int year = zonedDateTime.getYear();
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOGS_DIR_PATH + "output_" + year + ".log", true))) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(LOGS_DIR_PATH + SYMBOL + "_" + year + "_tmp.log", true))) {
             writer.write(logEntry);
             writer.newLine();
         } catch (IOException e) {

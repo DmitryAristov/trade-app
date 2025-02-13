@@ -67,28 +67,79 @@ public class TradingVueJsonUpdater {
         }
     }
 
-    public void updateMarketData(TreeMap<Long, MarketEntry> marketData) {
-        var uiMarketData = marketData
-                .entrySet()
-                .stream()
-                .map(entry -> {
-                    var uiEntry = new MarketKlineEntry();
-                    uiEntry.setOpenTime(entry.getKey());
-                    uiEntry.setLowPrice(entry.getValue().low());
-                    uiEntry.setHighPrice(entry.getValue().high());
-                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
-                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
-                    uiEntry.setVolume(entry.getValue().volume());
-                    return uiEntry;
-                })
-                .collect(Collectors.toMap(
+    public TreeMap<Long, MarketKlineEntry> updateMarketData(TreeMap<Long, MarketEntry> marketData) {
+//        var uiMarketData = marketData
+//                .entrySet()
+//                .stream()
+//                .map(entry -> {
+//                    var uiEntry = new MarketKlineEntry();
+//                    uiEntry.setOpenTime(entry.getKey());
+//                    uiEntry.setLowPrice(entry.getValue().low());
+//                    uiEntry.setHighPrice(entry.getValue().high());
+//                    uiEntry.setOpenPrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+//                    uiEntry.setClosePrice((entry.getValue().low() + entry.getValue().high()) * 0.5);
+//                    uiEntry.setVolume(entry.getValue().volume());
+//                    return uiEntry;
+//                })
+//                .collect(Collectors.toList());
+//                .collect(Collectors.toMap(
+//                        MarketKlineEntry::getOpenTime,
+//                        Function.identity(),
+//                        (first, second) -> first,
+//                        TreeMap::new
+//                ));
+//
+        int step = 10;
+        var marketDataList = marketData.entrySet().stream().toList();
+        TreeMap<Long, MarketEntry> marketData5 = new TreeMap<>();
+        for (int i = 0; i < marketDataList.size() - step; i += step) {
+            double low = marketDataList.get(i).getValue().low();
+            double high = marketDataList.get(i).getValue().high();
+            double volume = 0.;
+            for (int j = 0; j < step; j++) {
+                low = Math.min(low, marketDataList.get(i + j).getValue().low());
+                high = Math.max(high, marketDataList.get(i + j).getValue().high());
+                volume += marketDataList.get(i + j).getValue().volume();
+            }
+            marketData5.put(marketDataList.get(i).getKey(), new MarketEntry(high, low, volume));
+        }
+
+        marketDataList = marketData5.entrySet().stream().toList();
+        List<MarketKlineEntry> uiMarketData = new ArrayList<>();
+        for (int i = 0; i < marketDataList.size(); i++) {
+            MarketKlineEntry entry = new MarketKlineEntry();
+            MarketEntry currentEntry = marketDataList.get(i).getValue();
+            entry.setOpenTime(marketDataList.get(i).getKey());
+            entry.setVolume(marketDataList.get(i).getValue().volume());
+
+            if (uiMarketData.isEmpty()) {
+                entry.setLowPrice(currentEntry.low());
+                entry.setHighPrice(currentEntry.high());
+                entry.setOpenPrice((currentEntry.low() + currentEntry.high()) * 0.5);
+                entry.setClosePrice((currentEntry.low() + currentEntry.high()) * 0.5);
+                uiMarketData.add(entry);
+                continue;
+            } else {
+                entry.setHighPrice(currentEntry.high());
+                entry.setLowPrice(currentEntry.low());
+                entry.setOpenPrice(uiMarketData.get(i - 1).getClosePrice());
+                entry.setClosePrice((currentEntry.low() + currentEntry.high()) * 0.5);
+//                if (uiMarketData.get(i - 1).getHighPrice() < currentEntry.low()) {
+//                    entry.setClosePrice(currentEntry.high());
+//                } else if (uiMarketData.get(i - 1).getLowPrice() > currentEntry.high()) {
+//                    entry.setClosePrice(currentEntry.low());
+//                }
+                uiMarketData.add(entry);
+            }
+        }
+        var result = uiMarketData.stream().collect(Collectors.toMap(
                         MarketKlineEntry::getOpenTime,
                         Function.identity(),
                         (first, second) -> first,
                         TreeMap::new
                 ));
-
-        updateUiMarketData(uiMarketData);
+        updateUiMarketData(result);
+        return result;
     }
 
     public void updateAnalysedData(List<Imbalance> imbalances, List<Position> positions) {
@@ -235,16 +286,16 @@ public class TradingVueJsonUpdater {
                 ArrayNode first = mapper.createArrayNode();
                 first.add(imbalance.getStartTime());
                 first.add(0);
-                first.add(Double.parseDouble(String.format("%.2f", imbalance.getStartPrice())));
-                first.add(String.format("start price = %.2f$",
+                first.add(Double.parseDouble(String.format("%.5f", imbalance.getStartPrice())));
+                first.add(String.format("start price = %.5f$",
                         imbalance.getType() == Imbalance.Type.UP ? imbalance.getStartPrice() - imbalance.size() * 0.02 : imbalance.getStartPrice()));
                 data.add(first);
 
                 ArrayNode second = mapper.createArrayNode();
                 second.add(imbalance.getEndTime());
                 second.add(0);
-                second.add(Double.parseDouble(String.format("%.2f", imbalance.getEndPrice())));
-                second.add(String.format("end price = %.2f$",
+                second.add(Double.parseDouble(String.format("%.5f", imbalance.getEndPrice())));
+                second.add(String.format("end price = %.5f$",
                         imbalance.getType() == Imbalance.Type.UP ? imbalance.getEndPrice() : imbalance.getEndPrice() - imbalance.size() * 0.02));
                 data.add(second);
 
@@ -269,24 +320,24 @@ public class TradingVueJsonUpdater {
             ArrayNode open = mapper.createArrayNode();
             open.add(position.getOpenTime());
             open.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
-            open.add(Double.parseDouble(String.format("%.2f", position.getOpenPrice())));
-            open.add(String.format("OPEN with price %.2f$", position.getOpenPrice()));
+            open.add(Double.parseDouble(String.format("%.5f", position.getOpenPrice())));
+            open.add("OPEN");
             data.add(open);
 
             ArrayNode close = mapper.createArrayNode();
             close.add(position.getCloseTime());
             close.add(position.getOrder().getType() == OrderType.LONG ? 1 : 0);
-            close.add(Double.parseDouble(String.format("%.2f", position.getClosePrice())));
-            String profit = position.getProfitLoss() < 0 ? "loss" : "profit";
-            close.add(String.format("CLOSE with %s %.2f$", profit, position.getProfitLoss()));
+            close.add(Double.parseDouble(String.format("%.5f", position.getClosePrice())));
+            close.add("CLOSE");
             data.add(close);
 
             Settings settingsOpen = new Settings();
             settingsOpen.labelColor = "#000000";
             settingsOpen.markerSize = 8;
-            settingsOpen.legend = false;
+            settingsOpen.legend = true;
 
-            Onchart onchartOpen = new Onchart("Trade", "Trades", data, settingsOpen);
+            String profit = position.getProfitLoss() < 0 ? "loss" : "profit";
+            Onchart onchartOpen = new Onchart(String.format("OPEN with price %.5f$ (%s %.2f)", position.getOpenPrice(), profit, position.getProfitLoss()), "Trades", data, settingsOpen);
             ObjectNode segmentNodeOpen = mapper.valueToTree(onchartOpen);
             onchart.add(segmentNodeOpen);
         }

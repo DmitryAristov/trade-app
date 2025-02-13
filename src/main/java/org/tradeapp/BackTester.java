@@ -113,8 +113,8 @@ public class BackTester {
         long startTime = Instant.now().toEpochMilli();
         long firstKey = marketData.firstKey();//1666775517000
         long lastKey = marketData.lastKey();//1688132229000
-//        long firstKey = 1666675517000L;
-//        long lastKey = 1688032229000L;
+//        long firstKey = 1666396805000L;
+//        long lastKey = 1667520005000L;
 
         ZonedDateTime zonedDateTime = Instant.ofEpochMilli(firstKey).atZone(ZoneId.of("UTC"));
         int year = zonedDateTime.getYear();
@@ -150,7 +150,7 @@ public class BackTester {
         if (!SKIP_MARKET_DATA_UPDATE)
             handler.updateOrDownloadData();
 
-        for (int year = 2017; year <= 2025; year++) {
+        for (int year = 2024; year <= 2024; year++) {
             TreeMap<Long, MarketEntry> marketData = handler.readAllEntries(year);
             BackTester tester = new BackTester(SYMBOL, apiService, marketData, null);
             tester.runTests();

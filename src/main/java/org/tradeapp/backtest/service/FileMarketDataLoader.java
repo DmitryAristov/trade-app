@@ -6,10 +6,7 @@ import org.tradeapp.backtest.domain.MarketEntry;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -82,7 +79,7 @@ public class FileMarketDataLoader {
     }
 
     private Long readLatestSavedEntry() {
-        var lastYearEntrySet = readAllEntries(2025);
+        var lastYearEntrySet = readAllEntries(2020);//TODO
         if (lastYearEntrySet.isEmpty()) {
             return null;
         }
@@ -119,14 +116,16 @@ public class FileMarketDataLoader {
                     resultMap.put(parsedEntry.getKey(), parsedEntry.getValue());
                 }
             });
+        } catch (NoSuchFileException e) {
+            return resultMap;
         } catch (Exception e) {
-            throw new RuntimeException("Failed to read lines");
+            throw new RuntimeException(e);
         }
         return resultMap;
     }
 
     private String formatEntry(Long timestamp, double high, double low, double volume) {
-        return String.format("%d,%.2f,%.2f,%.2f", timestamp, high, low, volume);
+        return String.format("%d,%.6f,%.6f,%.6f", timestamp, high, low, volume);
     }
 
     private Map.Entry<Long, MarketEntry> parseEntry(String line) {

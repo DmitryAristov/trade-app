@@ -38,7 +38,7 @@ public class Strategy {
     private final Log log = new Log();
     private final ExchangeSimulator simulator;
     private final TreeMap<Long, MarketEntry> marketData;
-    private final TreeMap<Long, MarketKlineEntry> uiMarketData;
+    private TreeMap<Long, MarketKlineEntry> uiMarketData;
     private final ImbalanceService imbalanceService;
 
     private final Account account;
@@ -108,7 +108,7 @@ public class Strategy {
                     if (positions.isEmpty()) {
                         // все закрылось в убыток -> снова ждем имбаланс
                         if (lastImbalance != null) {
-//                        updateUI(currentTime);
+//                            updateUI(currentTime);
                             System.out.print("");
                         }
                         state = State.WAIT_IMBALANCE;
@@ -203,15 +203,15 @@ public class Strategy {
                 .toList();
 
         long delay = 10 * 60L * 1000L;
-        tradingVueJsSecondsUtils.updateMarketData(new TreeMap<>(marketData.subMap(lastImbalance.getStartTime() - delay, currentTime + delay)));
+        uiMarketData = tradingVueJsSecondsUtils.updateMarketData(new TreeMap<>(marketData.subMap(lastImbalance.getStartTime() - delay, currentTime + delay)));
         tradingVueJsSecondsUtils.updateAnalysedData(List.of(lastImbalance), imbPositions);
 
-        long imbMinuteKey = uiMarketData.keySet().stream()
-                .min(Comparator.comparing(key -> Math.abs(key - lastImbalance.getStartTime())))
-                .orElseThrow();
-
-        long minutesDelay = 600 * 15L * 60L * 1000L;
-        tradingVueJsMinutesUtils.updateUiMarketData(new TreeMap<>(uiMarketData.subMap(imbMinuteKey - minutesDelay, imbMinuteKey + minutesDelay)));
+//        long imbMinuteKey = uiMarketData.keySet().stream()
+//                .min(Comparator.comparing(key -> Math.abs(key - lastImbalance.getStartTime())))
+//                .orElseThrow();
+//
+//        long minutesDelay = 600 * 15L * 60L * 1000L;
+//        tradingVueJsMinutesUtils.updateUiMarketData(new TreeMap<>(uiMarketData.subMap(imbMinuteKey - minutesDelay, imbMinuteKey + minutesDelay)));
     }
 
     Imbalance lastImbalance = null;

@@ -154,21 +154,22 @@ public class ImbalanceService implements VolatilityListener {
      * @return true если валидный имбаланс
      */
     private boolean isValid(Imbalance imbalance) {
-        return imbalance.duration() > MIN_IMBALANCE_TIME_DURATION &&
-                seconds.get(imbalance.getStartTime()).size() * 2 < imbalance.size() &&
-                seconds.get(imbalance.getEndTime()).size() * 2 < imbalance.size() &&
-                seconds.subMap(imbalance.getStartTime(), imbalance.getEndTime()).entrySet().stream()
-                        .noneMatch(entry -> switch (imbalance.getType()) {
-                            case UP -> entry.getValue().high() > imbalance.getEndPrice();
-                            case DOWN -> entry.getValue().low() < imbalance.getEndPrice();
-                        }) &&
-                largeData.entrySet().stream()
-                        .filter(entry -> entry.getKey() <= imbalance.getStartTime() &&
-                                entry.getKey() >= imbalance.getStartTime() - TIME_CHECK_CONTR_IMBALANCE)
-                        .noneMatch(entry -> switch (imbalance.getType()) {
-                            case UP -> entry.getValue().high() > imbalance.getEndPrice() - imbalance.size() * 0.25;
-                            case DOWN -> entry.getValue().low() < imbalance.getEndPrice() + imbalance.size() * 0.25;
-                        });
+        boolean localExtremaBetweenStartEndPricesExists = seconds.subMap(imbalance.getStartTime(), imbalance.getEndTime()).entrySet().stream()
+                .anyMatch(entry -> switch (imbalance.getType()) {
+                    case UP -> entry.getValue().high() > imbalance.getEndPrice();
+                    case DOWN -> entry.getValue().low() < imbalance.getEndPrice();
+                });
+        boolean contrImbalanceExists = largeData.entrySet().stream()
+                .filter(entry -> entry.getKey() <= imbalance.getStartTime() &&
+                        entry.getKey() >= imbalance.getStartTime() - TIME_CHECK_CONTR_IMBALANCE)
+                .anyMatch(entry -> switch (imbalance.getType()) {
+                    case UP -> entry.getValue().high() > imbalance.getEndPrice() - imbalance.size() * 0.25;
+                    case DOWN -> entry.getValue().low() < imbalance.getEndPrice() + imbalance.size() * 0.25;
+                });
+        boolean minDurationFit = imbalance.duration() > MIN_IMBALANCE_TIME_DURATION;
+        boolean highSizePointsExists = seconds.get(imbalance.getStartTime()).size() * 2 < imbalance.size() &&
+                seconds.get(imbalance.getEndTime()).size() * 2 < imbalance.size();
+        return minDurationFit && highSizePointsExists && !localExtremaBetweenStartEndPricesExists && !contrImbalanceExists;
     }
 
     private void trackImbalanceProgress(long currentTime, MarketEntry currentEntry) {
