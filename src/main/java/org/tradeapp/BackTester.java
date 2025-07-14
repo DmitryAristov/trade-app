@@ -21,7 +21,7 @@ import static org.tradeapp.backtest.constants.Settings.*;
  * Для тестирования стратегии на предыдущих исторических данных.
  */
 public class BackTester {
-    public static final boolean SKIP_MARKET_DATA_UPDATE = true;
+    public static final boolean SKIP_MARKET_DATA_UPDATE = false;
 
     private final Log log = new Log();
 
@@ -150,7 +150,7 @@ public class BackTester {
         if (!SKIP_MARKET_DATA_UPDATE)
             handler.updateOrDownloadData();
 
-        for (int year = 2024; year <= 2024; year++) {
+        for (int year = 2025; year <= 2025; year++) {
             TreeMap<Long, MarketEntry> marketData = handler.readAllEntries(year);
             BackTester tester = new BackTester(SYMBOL, apiService, marketData, null);
             tester.runTests();

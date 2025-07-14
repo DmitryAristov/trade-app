@@ -61,8 +61,7 @@ public class FileMarketDataLoader {
             } else {
                 limit = MAX_ROWS_LIMIT;
             }
-            TreeMap<Long, MarketEntry> result = apiService.getMarketDataPublicAPI(symbol, "1s", latestEntry, limit, -1).getResponse();
-//            TreeMap<Long, MarketEntry> result = ExchangeRequestService.performBinanceVMarketDataRequest("1s", latestEntry, limit);
+            TreeMap<Long, MarketEntry> result = apiService.getMarketDataPublicAPI(symbol, "1s", latestEntry, limit, 1735689605000L).getResponse();
             appendEntries(result);
 
             currentSize += result.size();
@@ -79,7 +78,7 @@ public class FileMarketDataLoader {
     }
 
     private Long readLatestSavedEntry() {
-        var lastYearEntrySet = readAllEntries(2020);//TODO
+        var lastYearEntrySet = readAllEntries(2025);
         if (lastYearEntrySet.isEmpty()) {
             return null;
         }
